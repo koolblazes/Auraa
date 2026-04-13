@@ -692,19 +692,28 @@ function withdrawWallet(){
 // ═══════════════════════════════════════════════
 // DRIVER
 // ═══════════════════════════════════════════════
-const demoRequests=[
+const allPossibleTrips=[
   {id:1,svc:'ASSIST',fare:3800,from:'Victoria Island',to:'Lekki Phase 1',countdown:45},
   {id:2,svc:'GO',fare:2600,from:'Ikeja',to:'Maryland',countdown:30},
   {id:3,svc:'SKATE',fare:1200,from:'Yaba',to:'Surulere',countdown:20},
+  {id:4,svc:'ASSIST',fare:4200,from:'Lekki Phase 2',to:'Lagos Island',countdown:40},
+  {id:5,svc:'GO',fare:2100,from:'Surulere',to:'Oshodi',countdown:35},
+  {id:6,svc:'BIKE',fare:900,from:'Ojota',to:'Ketu',countdown:25},
+  {id:7,svc:'ASSIST',fare:3500,from:'Magodo',to:'VI',countdown:50},
+  {id:8,svc:'GO',fare:3100,from:'Ajah',to:'Lekki Phase 1',countdown:30},
 ];
+
+let activeRequests=[1,2,3]; // IDs currently showing
+let countdownTimers={};
 
 function renderDriverTrips(){
   const mc=document.getElementById('mainContent');
+  const showing=allPossibleTrips.filter(r=>activeRequests.includes(r.id));
   mc.innerHTML=`
   <div class="card">
-    <div class="card-title">Incoming Requests</div>
-    ${demoRequests.map(r=>`
-    <div class="trip-request">
+    <div class="card-title">Incoming Requests ${showing.length?`<span style="color:var(--gold)">(${showing.length})</span>`:''}</div>
+    ${showing.length?showing.map(r=>`
+    <div class="trip-request" id="tr_${r.id}">
       <div class="trip-req-header">
         <span class="trip-service-tag">${r.svc}</span>
         <span class="trip-fare-tag">₦${r.fare.toLocaleString()}</span>
@@ -718,33 +727,66 @@ function renderDriverTrips(){
         <button class="btn btn-outline btn-sm" onclick="declineTrip(${r.id})">✕ Decline</button>
       </div>
       <div class="countdown" id="cd_${r.id}">⏱ ${r.countdown}s</div>
-    </div>`).join('')}
+    </div>`).join(''):`<div class="empty-state" style="padding:1.5rem 0;"><div class="empty-icon">🚗</div>No incoming requests. Waiting for trips...</div>`}
   </div>`;
   startCountdowns();
 }
 
 function startCountdowns(){
-  demoRequests.forEach(r=>{
+  // Clear existing timers
+  Object.values(countdownTimers).forEach(iv=>clearInterval(iv));
+  countdownTimers={};
+
+  allPossibleTrips.filter(r=>activeRequests.includes(r.id)).forEach(r=>{
     let t=r.countdown;
-    const iv=setInterval(()=>{
+    countdownTimers[r.id]=setInterval(()=>{
       t--;
       const el=document.getElementById('cd_'+r.id);
-      if(!el){clearInterval(iv);return;}
-      el.textContent=`⏱ ${t}s`;
-      if(t<=0){clearInterval(iv);el.textContent='Expired';}
+      if(!el){clearInterval(countdownTimers[r.id]);return;}
+      if(t<=0){
+        clearInterval(countdownTimers[r.id]);
+        removeTrip(r.id,false);
+      } else {
+        el.textContent=`⏱ ${t}s`;
+        if(t<=10) el.style.color='var(--danger)';
+      }
     },1000);
   });
 }
 
+function removeTrip(id, accepted){
+  const el=document.getElementById('tr_'+id);
+  if(el){el.style.opacity='0';el.style.transform='translateY(-8px)';el.style.transition='all .3s';}
+  setTimeout(()=>{
+    activeRequests=activeRequests.filter(x=>x!==id);
+    clearInterval(countdownTimers[id]);
+    // Bring in a new trip after 5 seconds if available
+    if(accepted){
+      setTimeout(()=>{
+        const available=allPossibleTrips.filter(r=>!activeRequests.includes(r.id));
+        if(available.length && activeRequests.length<3){
+          activeRequests.push(available[0].id);
+          renderDriverTrips();
+          showToast('New trip request incoming!');
+        }
+      },5000);
+    }
+    renderDriverTrips();
+  },300);
+}
+
 function acceptTrip(id){
-  const r=demoRequests.find(x=>x.id===id);
+  const r=allPossibleTrips.find(x=>x.id===id);
   S.wallet+=r.fare;
   logTx({title:`AURAA ${r.svc} — ${r.from} → ${r.to}`,amount:r.fare,type:'credit'});
   showToast(`Trip accepted! Earned ₦${r.fare.toLocaleString()}`);
-  renderDriverTrips();
+  removeTrip(id, true);
 }
 
-function declineTrip(id){showToast('Trip declined');renderDriverTrips();}
+function declineTrip(id){
+  showToast('Trip declined');
+  removeTrip(id, false);
+}
 
 function renderDriverEarnings(){
   const mc=document.getElementById('mainContent');
