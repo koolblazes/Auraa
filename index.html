@@ -197,7 +197,7 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
 .countdown{font-family:'Syne',sans-serif;font-size:.7rem;color:var(--gold);text-align:right;}
 
 /* INVESTOR DECK */
-#investorOverlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;display:none;align-items:center;justify-content:center;padding:1rem;}
+#investorOverlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:10001;display:none;align-items:center;justify-content:center;padding:1rem;}
 #investorOverlay.show{display:flex;}
 .deck-modal{background:var(--dark2);border:1px solid var(--border);border-radius:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;position:relative;}
 .deck-close{position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;z-index:10;}
@@ -316,7 +316,7 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
   <div class="header-role" id="headerRole"><span id="roleLabel">—</span> <span class="live-badge" id="liveBadge" style="display:none">LIVE</span></div>
   <div class="header-actions">
     <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
-    <button class="icon-btn" onclick="showDeck()" title="Investor Deck">📊</button>
+    <button class="icon-btn" onclick="showDeck('vc')" title="Investor Deck">📊</button>
     <button class="icon-btn" onclick="logout()" title="Switch role">↩️</button>
   </div>
 </div>
@@ -327,7 +327,7 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
 </div>
 
 <!-- TAB BAR -->
-<div id="tabBar" id="tabBar"></div>
+<div id="tabBar"></div>
 
 <!-- MAIN CONTENT -->
 <div id="mainContent"></div>
@@ -339,7 +339,7 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
 <div class="toast" id="toast"></div>
 
 <!-- INVESTOR DECK OVERLAY -->
-<div id="investorOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:10001;display:none;align-items:center;justify-content:center;padding:1rem;">
+<div id="investorOverlay">
   <div class="deck-modal">
     <button class="deck-close" onclick="closeDeck()">✕</button>
     <div id="deckContent"></div>
@@ -380,15 +380,12 @@ const S = {
   role: null,
   tab: 0,
   service: 'assist',
-  tripState: 'idle', // idle | searching | active | rating
+  tripState: 'idle',
   tripProgress: 0,
   progressTimer: null,
   wallet: 42500,
-  deckSlide: 0,
-  ndaPassed: false,
   logoTaps: 0,
   logoTapTimer: null,
-  adminCode: '',
   visitCount: parseInt(localStorage.getItem('auraa_visits')||'0') + 1,
   dark: true,
 };
@@ -1108,10 +1105,10 @@ function showDeck(type){
     currentSlide=0;
     renderDeckSlide();
   }
-  overlay.style.display='flex';
+  overlay.classList.add('show');
 }
 
-function closeDeck(){document.getElementById('investorOverlay').style.display='none';}
+function closeDeck(){document.getElementById('investorOverlay').classList.remove('show');}
 
 function renderNdaGate(type){
   const isHni=type==='hni';
