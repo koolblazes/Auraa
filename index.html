@@ -1,44 +1,1096 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AURAA - Coming Soon</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(120deg, #0f2027, #203a43, #2c5364);
-      color: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      text-align: center;
-    }
-    h1 {
-      font-size: 3rem;
-    }
-    p {
-      font-size: 1.2rem;
-      margin-top: 1rem;
-    }
-    .tag {
-      background-color: #ff9800;
-      padding: 0.5rem 1rem;
-      border-radius: 20px;
-      margin-top: 1.5rem;
-      font-weight: bold;
-    }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AURAA Technologies — MVP v10</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --green: #0a5c36;
+  --green-light: #12803f;
+  --gold: #c9a84c;
+  --gold-light: #e8c96a;
+  --dark: #0d0d0d;
+  --dark2: #141414;
+  --dark3: #1c1c1c;
+  --card: #1a1a1a;
+  --border: rgba(201,168,76,0.18);
+  --text: #f0f0f0;
+  --muted: #888;
+  --white: #ffffff;
+  --danger: #e05252;
+  --success: #3ecf78;
+  --info: #4ea8de;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--dark);color:var(--text);min-height:100vh;overflow-x:hidden;}
+body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--border:rgba(10,92,54,0.15);--text:#1a1a1a;--muted:#666;}
+
+/* SPLASH */
+#splash{position:fixed;inset:0;background:linear-gradient(135deg,#050f08 0%,#0a1f12 50%,#050f08 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .6s;}
+#splash.hidden{opacity:0;pointer-events:none;}
+.splash-logo{font-family:'Syne',sans-serif;font-size:3.5rem;font-weight:800;color:var(--gold);letter-spacing:0.15em;animation:pulse 2s infinite;}
+.splash-sub{color:rgba(255,255,255,0.5);font-size:.85rem;letter-spacing:.25em;text-transform:uppercase;margin-top:.5rem;}
+.splash-tagline{color:rgba(255,255,255,0.3);font-size:.75rem;margin-top:2rem;text-align:center;max-width:260px;line-height:1.6;}
+.splash-tap{color:var(--gold);font-size:.75rem;margin-top:3rem;animation:blink 1.5s infinite;letter-spacing:.1em;}
+@keyframes pulse{0%,100%{text-shadow:0 0 20px rgba(201,168,76,.4);}50%{text-shadow:0 0 40px rgba(201,168,76,.8);}}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+/* ROLE SELECT */
+#roleSelect{position:fixed;inset:0;background:var(--dark);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:9998;padding:2rem;}
+#roleSelect.show{display:flex;}
+.role-title{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:800;color:var(--gold);margin-bottom:.5rem;text-align:center;}
+.role-sub{color:var(--muted);font-size:.85rem;margin-bottom:2.5rem;text-align:center;}
+.role-cards{display:grid;grid-template-columns:1fr 1fr;gap:1rem;width:100%;max-width:380px;}
+.role-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.5rem 1rem;text-align:center;cursor:pointer;transition:all .25s;}
+.role-card:hover,.role-card:active{border-color:var(--gold);transform:translateY(-2px);box-shadow:0 8px 24px rgba(201,168,76,.15);}
+.role-icon{font-size:2rem;margin-bottom:.75rem;}
+.role-name{font-family:'Syne',sans-serif;font-size:.95rem;font-weight:700;color:var(--text);}
+.role-desc{font-size:.72rem;color:var(--muted);margin-top:.3rem;}
+
+/* HEADER */
+#appHeader{background:var(--dark2);border-bottom:1px solid var(--border);padding:.75rem 1rem;display:none;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+#appHeader.show{display:flex;}
+.header-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;color:var(--gold);cursor:pointer;user-select:none;}
+.header-role{font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:.4rem;}
+.live-badge{background:var(--gold);color:var(--dark);font-size:.6rem;font-weight:700;padding:.15rem .4rem;border-radius:20px;letter-spacing:.05em;}
+.header-actions{display:flex;gap:.5rem;align-items:center;}
+.icon-btn{background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:.3rem;border-radius:8px;transition:color .2s;}
+.icon-btn:hover{color:var(--gold);}
+
+/* ADMIN TICKER */
+#adminTicker{background:var(--green);color:var(--white);font-size:.72rem;padding:.4rem 1rem;overflow:hidden;white-space:nowrap;display:none;}
+#adminTicker.show{display:block;}
+.ticker-inner{display:inline-block;animation:ticker 30s linear infinite;}
+@keyframes ticker{from{transform:translateX(100vw);}to{transform:translateX(-100%);}}
+
+/* TABS */
+#tabBar{display:none;background:var(--dark2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;position:sticky;top:57px;z-index:99;}
+#tabBar.show{display:flex;}
+#tabBar::-webkit-scrollbar{display:none;}
+.tab{padding:.65rem 1rem;font-size:.75rem;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all .2s;font-family:'Syne',sans-serif;}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+
+/* MAIN CONTENT */
+#mainContent{display:none;padding:1rem;max-width:500px;margin:0 auto;padding-bottom:80px;}
+#mainContent.show{display:block;}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.25rem;margin-bottom:1rem;}
+.card-title{font-family:'Syne',sans-serif;font-size:.85rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:1rem;}
+
+/* SERVICE PILLS */
+.service-pills{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;}
+.pill{padding:.45rem .9rem;border-radius:20px;font-size:.75rem;font-weight:600;cursor:pointer;border:1.5px solid var(--border);color:var(--muted);transition:all .2s;font-family:'Syne',sans-serif;}
+.pill.active{background:var(--green);color:var(--white);border-color:var(--green);}
+.pill:hover{border-color:var(--gold);color:var(--gold);}
+
+/* BOOKING FORM */
+.form-group{margin-bottom:.85rem;}
+.form-label{font-size:.72rem;color:var(--muted);margin-bottom:.35rem;display:block;font-weight:600;letter-spacing:.05em;}
+.form-input{width:100%;background:var(--dark3);border:1px solid var(--border);border-radius:10px;padding:.65rem .85rem;color:var(--text);font-size:.85rem;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s;}
+.form-input:focus{border-color:var(--gold);}
+.form-input::placeholder{color:var(--muted);}
+
+/* BUTTONS */
+.btn{width:100%;padding:.8rem;border:none;border-radius:12px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif;transition:all .25s;letter-spacing:.03em;}
+.btn-primary{background:linear-gradient(135deg,var(--green),var(--green-light));color:var(--white);}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(10,92,54,.4);}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold-light));color:var(--dark);}
+.btn-gold:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(201,168,76,.4);}
+.btn-outline{background:none;border:1.5px solid var(--border);color:var(--text);}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold);}
+.btn-sm{padding:.5rem .9rem;font-size:.75rem;width:auto;}
+.btn-danger{background:var(--danger);color:var(--white);}
+
+/* FARE DISPLAY */
+.fare-box{background:var(--dark3);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center;margin:1rem 0;}
+.fare-amount{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:var(--gold);}
+.fare-label{font-size:.72rem;color:var(--muted);margin-top:.2rem;}
+.split-row{display:flex;justify-content:space-between;align-items:center;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.78rem;}
+.split-row:last-child{border-bottom:none;}
+.split-label{color:var(--muted);}
+.split-val{font-weight:600;color:var(--text);}
+
+/* WALLET */
+.wallet-balance{text-align:center;padding:1.5rem 0;}
+.wallet-amount{font-family:'Syne',sans-serif;font-size:2.5rem;font-weight:800;color:var(--gold);}
+.wallet-label{font-size:.75rem;color:var(--muted);margin-top:.3rem;letter-spacing:.1em;text-transform:uppercase;}
+.wallet-actions{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:1.25rem;}
+.tx-row{display:flex;justify-content:space-between;align-items:center;padding:.75rem 0;border-bottom:1px solid var(--border);}
+.tx-row:last-child{border-bottom:none;}
+.tx-info{display:flex;flex-direction:column;gap:.2rem;}
+.tx-title{font-size:.82rem;font-weight:600;}
+.tx-date{font-size:.7rem;color:var(--muted);}
+.tx-amount{font-family:'Syne',sans-serif;font-weight:700;font-size:.9rem;}
+.tx-credit{color:var(--success);}
+.tx-debit{color:var(--danger);}
+
+/* EARNINGS CHART */
+.chart-bar-wrap{display:flex;align-items:flex-end;gap:6px;height:80px;margin-top:.75rem;}
+.chart-bar-col{display:flex;flex-direction:column;align-items:center;flex:1;gap:4px;}
+.chart-bar{width:100%;background:var(--green);border-radius:4px 4px 0 0;transition:height .5s ease;min-height:4px;}
+.chart-bar.highlight{background:var(--gold);}
+.chart-label{font-size:.6rem;color:var(--muted);}
+
+/* TRIP STATUS */
+.status-card{border-radius:16px;padding:1.25rem;text-align:center;margin-bottom:1rem;}
+.status-icon{font-size:2.5rem;margin-bottom:.75rem;}
+.status-title{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;margin-bottom:.4rem;}
+.status-sub{font-size:.8rem;color:var(--muted);}
+.progress-bar-wrap{background:var(--dark3);border-radius:20px;height:6px;margin:1rem 0;overflow:hidden;}
+.progress-bar{height:100%;background:linear-gradient(90deg,var(--green),var(--gold));border-radius:20px;transition:width 1s ease;}
+.eta-row{display:flex;justify-content:space-around;margin-top:.75rem;}
+.eta-item{text-align:center;}
+.eta-val{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;color:var(--gold);}
+.eta-lbl{font-size:.65rem;color:var(--muted);}
+
+/* MAP PLACEHOLDER */
+.map-box{background:var(--dark3);border-radius:12px;height:160px;position:relative;overflow:hidden;border:1px solid var(--border);}
+.map-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(201,168,76,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,.05) 1px,transparent 1px);background-size:20px 20px;}
+.map-dot{position:absolute;width:14px;height:14px;background:var(--gold);border-radius:50%;box-shadow:0 0 10px var(--gold);animation:moveDot 6s infinite linear;}
+.map-dest{position:absolute;width:10px;height:10px;background:var(--success);border-radius:50%;top:30%;right:20%;}
+.map-label{position:absolute;bottom:.5rem;left:.75rem;font-size:.65rem;color:var(--muted);}
+@keyframes moveDot{0%{top:70%;left:20%;}25%{top:50%;left:40%;}50%{top:35%;left:55%;}75%{top:30%;left:65%;}100%{top:70%;left:20%;}}
+
+/* OWNER MONITOR */
+.monitor-card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:1rem;}
+.monitor-header{background:var(--green);padding:.75rem 1rem;display:flex;justify-content:space-between;align-items:center;}
+.monitor-title{font-family:'Syne',sans-serif;font-size:.85rem;font-weight:700;color:var(--white);}
+.monitor-status{font-size:.7rem;color:rgba(255,255,255,.7);display:flex;align-items:center;gap:.3rem;}
+.pulse-dot{width:8px;height:8px;background:var(--gold);border-radius:50%;animation:pulseDot 1.5s infinite;}
+@keyframes pulseDot{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.4);opacity:.6;}}
+.monitor-body{padding:1rem;}
+.timeline{position:relative;padding-left:1.25rem;}
+.timeline::before{content:'';position:absolute;left:.35rem;top:0;bottom:0;width:2px;background:var(--border);}
+.tl-item{position:relative;padding-bottom:.85rem;font-size:.78rem;}
+.tl-item::before{content:'';position:absolute;left:-.95rem;top:.2rem;width:8px;height:8px;border-radius:50%;background:var(--muted);}
+.tl-item.done::before{background:var(--success);}
+.tl-item.active::before{background:var(--gold);animation:pulseDot 1.5s infinite;}
+.tl-time{color:var(--muted);font-size:.68rem;}
+.alert-row{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border-radius:8px;margin-top:.5rem;font-size:.75rem;}
+.alert-warn{background:rgba(224,82,82,.1);border:1px solid rgba(224,82,82,.2);color:var(--danger);}
+.alert-ok{background:rgba(62,207,120,.1);border:1px solid rgba(62,207,120,.2);color:var(--success);}
+
+/* DRIVER PANEL */
+.trip-request{background:var(--dark3);border:1.5px solid var(--gold);border-radius:14px;padding:1rem;margin-bottom:.75rem;animation:slideIn .3s ease;}
+@keyframes slideIn{from{transform:translateY(-10px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.trip-req-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;}
+.trip-service-tag{background:var(--green);color:var(--white);font-size:.65rem;font-weight:700;padding:.2rem .6rem;border-radius:20px;font-family:'Syne',sans-serif;}
+.trip-fare-tag{font-family:'Syne',sans-serif;font-size:1rem;font-weight:800;color:var(--gold);}
+.trip-route{font-size:.78rem;margin-bottom:.75rem;}
+.trip-from,.trip-to{color:var(--muted);margin-bottom:.25rem;}
+.trip-from span,.trip-to span{color:var(--text);font-weight:500;}
+.trip-actions{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;}
+.countdown{font-family:'Syne',sans-serif;font-size:.7rem;color:var(--gold);text-align:right;}
+
+/* INVESTOR DECK */
+#investorOverlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1000;display:none;align-items:center;justify-content:center;padding:1rem;}
+#investorOverlay.show{display:flex;}
+.deck-modal{background:var(--dark2);border:1px solid var(--border);border-radius:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;position:relative;}
+.deck-close{position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;z-index:10;}
+.deck-slide{padding:1.5rem;min-height:300px;display:none;}
+.deck-slide.active{display:block;}
+.slide-num{font-size:.65rem;color:var(--muted);margin-bottom:.5rem;letter-spacing:.1em;}
+.slide-title{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;color:var(--gold);margin-bottom:.75rem;line-height:1.3;}
+.slide-body{font-size:.82rem;color:var(--muted);line-height:1.7;}
+.slide-body strong{color:var(--text);}
+.slide-metric{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:var(--gold);text-align:center;padding:1rem 0;}
+.slide-metric-label{font-size:.72rem;color:var(--muted);text-align:center;margin-top:-.5rem;}
+.deck-nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;border-top:1px solid var(--border);}
+.deck-nav-btn{background:none;border:1.5px solid var(--border);color:var(--text);padding:.5rem 1rem;border-radius:8px;font-size:.78rem;cursor:pointer;font-family:'Syne',sans-serif;transition:all .2s;}
+.deck-nav-btn:hover{border-color:var(--gold);color:var(--gold);}
+.deck-progress{font-size:.72rem;color:var(--muted);}
+.deck-cta{display:grid;gap:.75rem;padding:1rem 1.5rem;border-top:1px solid var(--border);}
+
+/* NDA GATE */
+.nda-gate{text-align:center;padding:2rem 1rem;}
+.nda-icon{font-size:3rem;margin-bottom:1rem;}
+.nda-title{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;color:var(--gold);margin-bottom:.5rem;}
+.nda-text{font-size:.78rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.6;}
+
+/* STATS GRID */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem;}
+.stat-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1rem;text-align:center;}
+.stat-val{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:var(--gold);}
+.stat-lbl{font-size:.68rem;color:var(--muted);margin-top:.2rem;}
+
+/* VISITOR TRACKER */
+.visitor-box{background:var(--dark3);border-radius:10px;padding:.85rem;font-size:.75rem;}
+.visitor-row{display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border);}
+.visitor-row:last-child{border-bottom:none;}
+
+/* THEME TOGGLE */
+.theme-toggle{position:fixed;bottom:1.5rem;right:1rem;background:var(--card);border:1px solid var(--border);border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.3);z-index:200;transition:transform .2s;}
+.theme-toggle:hover{transform:scale(1.1);}
+
+/* TOAST */
+.toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);border-radius:12px;padding:.65rem 1.25rem;font-size:.78rem;color:var(--text);opacity:0;pointer-events:none;transition:all .3s;z-index:9999;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* REVENUE STREAMS */
+.rev-row{display:flex;align-items:center;gap:.75rem;padding:.6rem 0;border-bottom:1px solid var(--border);}
+.rev-row:last-child{border-bottom:none;}
+.rev-icon{font-size:1.2rem;width:32px;text-align:center;}
+.rev-info{flex:1;}
+.rev-name{font-size:.82rem;font-weight:600;}
+.rev-desc{font-size:.68rem;color:var(--muted);}
+.rev-pct{font-family:'Syne',sans-serif;font-size:.9rem;font-weight:700;color:var(--gold);}
+
+/* MISC */
+.divider{height:1px;background:var(--border);margin:1rem 0;}
+.badge{display:inline-block;padding:.2rem .55rem;border-radius:20px;font-size:.65rem;font-weight:700;font-family:'Syne',sans-serif;}
+.badge-green{background:rgba(10,92,54,.25);color:var(--success);border:1px solid rgba(62,207,120,.2);}
+.badge-gold{background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.25);}
+.badge-red{background:rgba(224,82,82,.15);color:var(--danger);border:1px solid rgba(224,82,82,.25);}
+.section-header{font-family:'Syne',sans-serif;font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.75rem;}
+.empty-state{text-align:center;padding:2.5rem 1rem;color:var(--muted);font-size:.82rem;}
+.empty-icon{font-size:2.5rem;margin-bottom:.75rem;opacity:.4;}
+</style>
 </head>
 <body>
-  <h1>AURAA</h1>
-  <p>Assured Urban Ride Assistance App</p>
-  <div class="tag">Backed by Pi Network (pending)</div>
-  <p>Coming Soon 🚗✨</p>
+
+<!-- SPLASH -->
+<div id="splash" onclick="hideSplash()">
+  <div class="splash-logo">AURAA</div>
+  <div class="splash-sub">Technologies Limited</div>
+  <div class="splash-tagline">Assured Urban Ride Assistance &amp; Assistance — Redefining mobility infrastructure across Africa</div>
+  <div class="splash-tap">TAP TO ENTER</div>
+</div>
+
+<!-- ROLE SELECT -->
+<div id="roleSelect">
+  <div class="role-title">Welcome to AURAA</div>
+  <div class="role-sub">Select your role to continue</div>
+  <div class="role-cards">
+    <div class="role-card" onclick="selectRole('rider')">
+      <div class="role-icon">🧍</div>
+      <div class="role-name">Rider</div>
+      <div class="role-desc">Book trips &amp; manage wallet</div>
+    </div>
+    <div class="role-card" onclick="selectRole('driver')">
+      <div class="role-icon">🚗</div>
+      <div class="role-name">Driver</div>
+      <div class="role-desc">Accept trips &amp; earn</div>
+    </div>
+    <div class="role-card" onclick="selectRole('owner')">
+      <div class="role-icon">🏢</div>
+      <div class="role-name">Vehicle Owner</div>
+      <div class="role-desc">Monitor &amp; earn passively</div>
+    </div>
+    <div class="role-card" onclick="selectRole('admin')">
+      <div class="role-icon">⚙️</div>
+      <div class="role-name">Admin</div>
+      <div class="role-desc">Platform overview</div>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div id="appHeader">
+  <div class="header-logo" id="headerLogo">AURAA</div>
+  <div class="header-role" id="headerRole"><span id="roleLabel">—</span> <span class="live-badge" id="liveBadge" style="display:none">LIVE</span></div>
+  <div class="header-actions">
+    <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+    <button class="icon-btn" onclick="showDeck()" title="Investor Deck">📊</button>
+    <button class="icon-btn" onclick="logout()" title="Switch role">↩️</button>
+  </div>
+</div>
+
+<!-- ADMIN TICKER -->
+<div id="adminTicker">
+  <div class="ticker-inner" id="tickerInner">Loading platform data...</div>
+</div>
+
+<!-- TAB BAR -->
+<div id="tabBar" id="tabBar"></div>
+
+<!-- MAIN CONTENT -->
+<div id="mainContent"></div>
+
+<!-- THEME TOGGLE -->
+<button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- INVESTOR DECK OVERLAY -->
+<div id="investorOverlay">
+  <div class="deck-modal">
+    <button class="deck-close" onclick="closeDeck()">✕</button>
+    <div id="deckContent"></div>
+    <div class="deck-nav">
+      <button class="deck-nav-btn" onclick="prevSlide()">← Prev</button>
+      <span class="deck-progress" id="deckProgress">1 / 20</span>
+      <button class="deck-nav-btn" onclick="nextSlide()">Next →</button>
+    </div>
+    <div class="deck-cta">
+      <button class="btn btn-gold btn-sm" onclick="ctaAction('deck')">📥 Request Full Deck</button>
+      <button class="btn btn-primary btn-sm" onclick="ctaAction('call')">📞 Schedule a Call</button>
+      <button class="btn btn-outline btn-sm" onclick="ctaAction('allocation')">🔑 Early Allocation</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+const S = {
+  role: null,
+  tab: 0,
+  service: 'assist',
+  tripState: 'idle', // idle | searching | active | rating
+  tripProgress: 0,
+  progressTimer: null,
+  wallet: 42500,
+  deckSlide: 0,
+  ndaPassed: false,
+  logoTaps: 0,
+  logoTapTimer: null,
+  adminCode: '',
+  visitCount: parseInt(localStorage.getItem('auraa_visits')||'0') + 1,
+  dark: true,
+};
+localStorage.setItem('auraa_visits', S.visitCount);
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+function hideSplash(){
+  document.getElementById('splash').classList.add('hidden');
+  setTimeout(()=>{
+    document.getElementById('splash').style.display='none';
+    document.getElementById('roleSelect').classList.add('show');
+  },600);
+}
+
+function selectRole(role){
+  S.role = role;
+  document.getElementById('roleSelect').classList.remove('show');
+  document.getElementById('appHeader').classList.add('show');
+  document.getElementById('mainContent').classList.add('show');
+  document.getElementById('tabBar').classList.add('show');
+  document.getElementById('roleLabel').textContent = roleLabels[role];
+  if(role==='admin'){
+    document.getElementById('adminTicker').classList.add('show');
+    updateTicker();
+  }
+  buildTabs();
+  renderTab(0);
+  trackVisit(role);
+}
+
+const roleLabels = {rider:'Rider',driver:'Driver',owner:'Vehicle Owner',admin:'Admin'};
+
+function logout(){
+  S.role=null; S.tab=0; S.tripState='idle';
+  document.getElementById('appHeader').classList.remove('show');
+  document.getElementById('tabBar').classList.remove('show');
+  document.getElementById('mainContent').classList.remove('show');
+  document.getElementById('adminTicker').classList.remove('show');
+  document.getElementById('roleSelect').classList.add('show');
+}
+
+// ═══════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════
+const tabConfig = {
+  rider:  ['Book Trip','My Trips','Wallet','Investor'],
+  driver: ['Trips','Earnings','Schedule','Investor'],
+  owner:  ['Monitor','Earnings','Fleet','Investor'],
+  admin:  ['Dashboard','Trips','Revenue','Visitors','Investor'],
+};
+
+function buildTabs(){
+  const bar = document.getElementById('tabBar');
+  bar.innerHTML='';
+  (tabConfig[S.role]||[]).forEach((t,i)=>{
+    const d=document.createElement('div');
+    d.className='tab'+(i===0?' active':'');
+    d.textContent=t;
+    d.onclick=()=>renderTab(i);
+    bar.appendChild(d);
+  });
+}
+
+function renderTab(i){
+  S.tab=i;
+  document.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('active',j===i));
+  const mc=document.getElementById('mainContent');
+  mc.innerHTML='';
+  const renders={
+    rider:[renderBook,renderMyTrips,renderWallet,renderInvestorTab],
+    driver:[renderDriverTrips,renderDriverEarnings,renderDriverSchedule,renderInvestorTab],
+    owner:[renderOwnerMonitor,renderOwnerEarnings,renderFleet,renderInvestorTab],
+    admin:[renderAdminDash,renderAdminTrips,renderAdminRevenue,renderAdminVisitors,renderInvestorTab],
+  };
+  (renders[S.role]||[])[i]?.();
+}
+
+// ═══════════════════════════════════════════════
+// RIDER — BOOK
+// ═══════════════════════════════════════════════
+function renderBook(){
+  if(S.tripState==='active'||S.tripState==='searching'){renderTripActive();return;}
+  const mc=document.getElementById('mainContent');
+  mc.innerHTML=`
+  <div class="card">
+    <div class="card-title">Select Service</div>
+    <div class="service-pills" id="pills">
+      ${['assist','go','skate','bike','fix'].map(s=>`<div class="pill${S.service===s?' active':''}" onclick="setService('${s}')">${svcLabel(s)}</div>`).join('')}
+    </div>
+    <div id="svcDesc" class="slide-body" style="margin-bottom:1rem;">${svcDesc(S.service)}</div>
+    <div class="form-group">
+      <label class="form-label">PICKUP LOCATION</label>
+      <input class="form-input" id="pickup" placeholder="e.g. Victoria Island, Lagos" value="Victoria Island, Lagos"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">DROP-OFF LOCATION</label>
+      <input class="form-input" id="dropoff" placeholder="e.g. Lekki Phase 1"/>
+    </div>
+    ${S.service==='assist'?`<div class="form-group">
+      <label class="form-label">YOUR VEHICLE</label>
+      <input class="form-input" placeholder="e.g. Toyota Camry • ABC-123-XY"/>
+    </div>`:''}
+    <button class="btn btn-gold" onclick="calcFare()">Calculate Fare</button>
+  </div>
+  <div id="fareResult"></div>`;
+}
+
+function svcLabel(s){return{assist:'ASSIST',go:'GO',skate:'SKATE',bike:'BIKE',fix:'FIX-IT'}[s]||s;}
+function svcDesc(s){
+  return{
+    assist:'<strong>AURAA ASSIST</strong> — A professional driver dispatched to operate <em>your own vehicle</em>. Our global exclusive.',
+    go:'<strong>AURAA GO</strong> — Standard ride-hailing. Hop in a verified AURAA vehicle.',
+    skate:'<strong>AURAA SKATE</strong> — Inline skater dispatch for last-mile urban mobility.',
+    bike:'<strong>AURAA BIKE</strong> — Motorcycle dispatch for fast, affordable trips.',
+    fix:'<strong>FIX-IT NETWORK</strong> — On-demand roadside assistance &amp; vehicle repair.',
+  }[s]||'';
+}
+
+function setService(s){
+  S.service=s;
+  document.querySelectorAll('.pill').forEach((p,i)=>p.classList.toggle('active',['assist','go','skate','bike','fix'][i]===s));
+  document.getElementById('svcDesc').innerHTML=svcDesc(s);
+}
+
+function calcFare(){
+  const d=document.getElementById('dropoff').value;
+  if(!d){showToast('Enter a drop-off location');return;}
+  const fares={assist:3800,go:2800,skate:1200,bike:900,fix:5000};
+  const base=fares[S.service]||2500;
+  const fare=base+Math.floor(Math.random()*500);
+  const splits=getSplits(S.service,fare);
+  document.getElementById('fareResult').innerHTML=`
+  <div class="card">
+    <div class="fare-box">
+      <div class="fare-amount">₦${fare.toLocaleString()}</div>
+      <div class="fare-label">Estimated Fare • ${svcLabel(S.service)} Service</div>
+    </div>
+    <div class="card-title">Fare Breakdown</div>
+    ${splits.map(r=>`<div class="split-row"><span class="split-label">${r.l}</span><span class="split-val">₦${r.v.toLocaleString()}</span></div>`).join('')}
+    <div style="margin-top:1rem;">
+      <button class="btn btn-primary" onclick="bookTrip(${fare})">Confirm &amp; Book</button>
+    </div>
+  </div>`;
+}
+
+function getSplits(svc,fare){
+  const m={
+    assist:[['Driver (65%)',.65],['Platform (10%)',.10],['Insurance (10%)',.10],['Owner Rebate (5%)',.05],['Telco (5%)',.05]],
+    go:[['Driver (55%)',.55],['Vehicle Owner (25%)',.25],['Platform (10%)',.10],['Insurance (5%)',.05],['Telco (5%)',.05]],
+    skate:[['Dispatcher (80%)',.80],['Platform (20%)',.20]],
+    bike:[['Dispatcher (75%)',.75],['Platform (25%)',.25]],
+    fix:[['Technician (70%)',.70],['Platform (30%)',.30]],
+  };
+  return (m[svc]||m.go).map(([l,p])=>({l,v:Math.round(fare*p)}));
+}
+
+function bookTrip(fare){
+  if(S.wallet<fare){showToast('Insufficient wallet balance. Please fund.');return;}
+  S.wallet-=fare;
+  S.tripState='searching';
+  logTx({title:`AURAA ${svcLabel(S.service)} Trip`,amount:-fare,type:'debit'});
+  renderTripActive();
+  setTimeout(()=>{S.tripState='active';renderTab(0);},3000);
+}
+
+function renderTripActive(){
+  const mc=document.getElementById('mainContent');
+  if(S.tripState==='searching'){
+    mc.innerHTML=`
+    <div class="card status-card" style="background:var(--dark3);">
+      <div class="status-icon">🔍</div>
+      <div class="status-title">Finding Your Driver</div>
+      <div class="status-sub">Matching with nearby verified drivers...</div>
+      <div class="progress-bar-wrap"><div class="progress-bar" style="width:60%;animation:search 1.5s infinite alternate;"></div></div>
+    </div>
+    <style>@keyframes search{from{width:30%;}to{width:90%;}</style>`;
+    return;
+  }
+  let prog=S.tripProgress||0;
+  mc.innerHTML=`
+  <div class="card">
+    <div class="card-title">Trip in Progress</div>
+    <div class="map-box"><div class="map-grid"></div><div class="map-dot"></div><div class="map-dest"></div><div class="map-label">AURAA Live Tracking</div></div>
+    <div class="progress-bar-wrap" style="margin-top:.85rem;"><div class="progress-bar" id="tripProg" style="width:${prog}%;"></div></div>
+    <div class="eta-row">
+      <div class="eta-item"><div class="eta-val" id="etaMin">${Math.max(0,12-Math.floor(prog/10))}</div><div class="eta-lbl">MIN ETA</div></div>
+      <div class="eta-item"><div class="eta-val">${svcLabel(S.service)}</div><div class="eta-lbl">SERVICE</div></div>
+      <div class="eta-item"><div class="eta-val">4.9⭐</div><div class="eta-lbl">DRIVER RATING</div></div>
+    </div>
+    <div style="margin-top:1rem;display:grid;gap:.5rem;">
+      <button class="btn btn-outline btn-sm" onclick="completeTrip()">Mark as Completed</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-header">Your Driver</div>
+    <div style="display:flex;align-items:center;gap:.85rem;">
+      <div style="width:44px;height:44px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;">👨‍✈️</div>
+      <div><div style="font-weight:600;font-size:.9rem;">Tolu Adesoga</div><div style="font-size:.72rem;color:var(--muted);">Toyota Camry • ABC-234-LG</div></div>
+      <div style="margin-left:auto;"><span class="badge badge-green">VERIFIED</span></div>
+    </div>
+  </div>`;
+  if(S.progressTimer) clearInterval(S.progressTimer);
+  S.progressTimer=setInterval(()=>{
+    prog=Math.min(prog+2,100);
+    S.tripProgress=prog;
+    const pb=document.getElementById('tripProg');
+    const em=document.getElementById('etaMin');
+    if(pb) pb.style.width=prog+'%';
+    if(em) em.textContent=Math.max(0,12-Math.floor(prog/10));
+    if(prog>=100){clearInterval(S.progressTimer);completeTrip();}
+  },600);
+}
+
+function completeTrip(){
+  clearInterval(S.progressTimer);
+  S.tripState='idle'; S.tripProgress=0;
+  showToast('Trip completed! Rate your driver.');
+  renderTab(0);
+}
+
+// ═══════════════════════════════════════════════
+// RIDER — MY TRIPS
+// ═══════════════════════════════════════════════
+function renderMyTrips(){
+  const trips=getTxLog().filter(t=>t.type==='debit');
+  const mc=document.getElementById('mainContent');
+  if(!trips.length){
+    mc.innerHTML=`<div class="empty-state"><div class="empty-icon">🚗</div>No trips yet. Book your first ride!</div>`;
+    return;
+  }
+  mc.innerHTML=`<div class="card"><div class="card-title">Trip History</div>${
+    trips.map(t=>`<div class="tx-row">
+      <div class="tx-info"><div class="tx-title">${t.title}</div><div class="tx-date">${t.date}</div></div>
+      <div class="tx-amount tx-debit">−₦${Math.abs(t.amount).toLocaleString()}</div>
+    </div>`).join('')
+  }</div>`;
+}
+
+// ═══════════════════════════════════════════════
+// WALLET
+// ═══════════════════════════════════════════════
+function renderWallet(){
+  const mc=document.getElementById('mainContent');
+  const txs=getTxLog();
+  mc.innerHTML=`
+  <div class="card">
+    <div class="wallet-balance">
+      <div class="wallet-amount">₦${S.wallet.toLocaleString()}</div>
+      <div class="wallet-label">AURAA Wallet Balance</div>
+    </div>
+    <div class="wallet-actions">
+      <button class="btn btn-gold" onclick="fundWallet()">+ Fund Wallet</button>
+      <button class="btn btn-outline" onclick="withdrawWallet()">↑ Withdraw</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Transaction Log</div>
+    ${txs.length?txs.map(t=>`<div class="tx-row">
+      <div class="tx-info"><div class="tx-title">${t.title}</div><div class="tx-date">${t.date}</div></div>
+      <div class="tx-amount ${t.type==='credit'?'tx-credit':'tx-debit'}">${t.type==='credit'?'+':'−'}₦${Math.abs(t.amount).toLocaleString()}</div>
+    </div>`).join(''):`<div class="empty-state" style="padding:1rem 0;">No transactions yet.</div>`}
+  </div>`;
+}
+
+function fundWallet(){
+  const amt=10000;
+  S.wallet+=amt;
+  logTx({title:'Wallet Funded via Flutterwave',amount:amt,type:'credit'});
+  showToast(`₦${amt.toLocaleString()} added to wallet`);
+  renderWallet();
+}
+
+function withdrawWallet(){
+  if(S.wallet<1000){showToast('Minimum withdrawal is ₦1,000');return;}
+  const amt=5000;
+  if(S.wallet<amt){showToast('Insufficient balance');return;}
+  S.wallet-=amt;
+  logTx({title:'Withdrawal to Bank Account',amount:amt,type:'debit'});
+  showToast('Withdrawal initiated');
+  renderWallet();
+}
+
+// ═══════════════════════════════════════════════
+// DRIVER
+// ═══════════════════════════════════════════════
+const demoRequests=[
+  {id:1,svc:'ASSIST',fare:3800,from:'Victoria Island',to:'Lekki Phase 1',countdown:45},
+  {id:2,svc:'GO',fare:2600,from:'Ikeja',to:'Maryland',countdown:30},
+  {id:3,svc:'SKATE',fare:1200,from:'Yaba',to:'Surulere',countdown:20},
+];
+
+function renderDriverTrips(){
+  const mc=document.getElementById('mainContent');
+  mc.innerHTML=`
+  <div class="card">
+    <div class="card-title">Incoming Requests</div>
+    ${demoRequests.map(r=>`
+    <div class="trip-request">
+      <div class="trip-req-header">
+        <span class="trip-service-tag">${r.svc}</span>
+        <span class="trip-fare-tag">₦${r.fare.toLocaleString()}</span>
+      </div>
+      <div class="trip-route">
+        <div class="trip-from">FROM: <span>${r.from}</span></div>
+        <div class="trip-to">TO: <span>${r.to}</span></div>
+      </div>
+      <div class="trip-actions">
+        <button class="btn btn-primary btn-sm" onclick="acceptTrip(${r.id})">✓ Accept</button>
+        <button class="btn btn-outline btn-sm" onclick="declineTrip(${r.id})">✕ Decline</button>
+      </div>
+      <div class="countdown" id="cd_${r.id}">⏱ ${r.countdown}s</div>
+    </div>`).join('')}
+  </div>`;
+  startCountdowns();
+}
+
+function startCountdowns(){
+  demoRequests.forEach(r=>{
+    let t=r.countdown;
+    const iv=setInterval(()=>{
+      t--;
+      const el=document.getElementById('cd_'+r.id);
+      if(!el){clearInterval(iv);return;}
+      el.textContent=`⏱ ${t}s`;
+      if(t<=0){clearInterval(iv);el.textContent='Expired';}
+    },1000);
+  });
+}
+
+function acceptTrip(id){
+  const r=demoRequests.find(x=>x.id===id);
+  S.wallet+=r.fare;
+  logTx({title:`AURAA ${r.svc} — ${r.from} → ${r.to}`,amount:r.fare,type:'credit'});
+  showToast(`Trip accepted! Earned ₦${r.fare.toLocaleString()}`);
+  renderDriverTrips();
+}
+
+function declineTrip(id){showToast('Trip declined');renderDriverTrips();}
+
+function renderDriverEarnings(){
+  const mc=document.getElementById('mainContent');
+  const weeks=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const vals=[4200,6800,3500,7200,8900,12000,5400];
+  const max=Math.max(...vals);
+  mc.innerHTML=`
+  <div class="card">
+    <div class="wallet-balance">
+      <div class="wallet-amount">₦${S.wallet.toLocaleString()}</div>
+      <div class="wallet-label">Total Driver Earnings</div>
+    </div>
+    <div class="wallet-actions">
+      <button class="btn btn-gold" onclick="withdrawWallet()">↑ Withdraw</button>
+      <button class="btn btn-outline" onclick="">📋 Statement</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Weekly Earnings</div>
+    <div class="chart-bar-wrap">
+      ${vals.map((v,i)=>`<div class="chart-bar-col">
+        <div class="chart-bar${i===5?' highlight':''}" style="height:${Math.round(v/max*70)+10}px"></div>
+        <div class="chart-label">${weeks[i]}</div>
+      </div>`).join('')}
+    </div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-val">47</div><div class="stat-lbl">Trips This Month</div></div>
+    <div class="stat-box"><div class="stat-val">4.9⭐</div><div class="stat-lbl">Driver Rating</div></div>
+    <div class="stat-box"><div class="stat-val">98%</div><div class="stat-lbl">Acceptance Rate</div></div>
+    <div class="stat-box"><div class="stat-val">₦48k</div><div class="stat-lbl">This Month</div></div>
+  </div>`;
+}
+
+function renderDriverSchedule(){
+  const mc=document.getElementById('mainContent');
+  mc.innerHTML=`
+  <div class="card">
+    <div class="card-title">Today's Schedule</div>
+    <div class="timeline">
+      <div class="tl-item done"><strong>7:00 AM</strong> — Morning shift start<br/><span class="tl-time">VI → Lekki corridor</span></div>
+      <div class="tl-item done"><strong>9:30 AM</strong> — Trip completed ₦3,800<br/><span class="tl-time">Assist • 4.9 rating</span></div>
+      <div class="tl-item active"><strong>Now</strong> — Available for requests<br/><span class="tl-time">Online • VI area</span></div>
+      <div class="tl-item"><strong>2:00 PM</strong> — Afternoon shift<br/><span class="tl-time">Planned: Ikeja corridor</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Service Availability</div>
+    ${['AURAA ASSIST','AURAA GO'].map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:.82rem;font-weight:600;">${s}</span>
+      <span class="badge badge-green">ACTIVE</span>
+    </div>`).join('')}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+// OWNER
+// ═══════════════════════════════════════════════
+function renderOwnerMonitor(){
+  const mc=document.getElementById('mainContent');
+  mc.innerHTML=`
+  <div class="monitor-card">
+    <div class="monitor-header">
+      <div class="monitor-title">Toyota Camry • ABC-234-LG</div>
+      <div class="monitor-status"><div class="pulse-dot"></div>LIVE TRACKING</div>
+    </div>
+    <div class="monitor-body">
+      <div class="map-box"><div class="map-grid"></div><div class="map-dot"></div><div class="map-dest"></div><div class="map-label">📍 En Route — Lekki</div></div>
+      <div class="eta-row" style="margin-top:.75rem;">
+        <div class="eta-item"><div class="eta-val">67</div><div class="eta-lbl">KM/H</div></div>
+        <div class="eta-item"><div class="eta-val">14km</div><div class="eta-lbl">DISTANCE</div></div>
+        <div class="eta-item"><div class="eta-val">₦950</div><div class="eta-lbl">EARNING NOW</div></div>
+      </div>
+      <div class="divider"></div>
+      <div class="section-header">Trip Timeline</div>
+      <div class="timeline">
+        <div class="tl-item done"><strong>8:15 AM</strong> — Driver logged in<br/><span class="tl-time">Tolu Adesoga — Verified</span></div>
+        <div class="tl-item done"><strong>8:45 AM</strong> — Trip started<br/><span class="tl-time">VI → Lekki Phase 1</span></div>
+        <div class="tl-item active"><strong>Now</strong> — In transit<br/><span class="tl-time">ETA 8 minutes</span></div>
+      </div>
+      <div class="alert-row alert-ok">✅ Vehicle within approved zone. Speed normal.</div>
+      <div class="alert-row alert-warn" id="deviationAlert" style="display:none;">⚠️ Route deviation detected</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Vehicle Guardian</div>
+    <div style="font-size:.78rem;color:var(--muted);line-height:1.7;">Real-time deviation alerts, remote monitoring, and Safe Slowdown Mode (future). Your asset, always protected.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.75rem;">
+      <div class="stat-box"><div class="stat-val">✅</div><div class="stat-lbl">Geofence OK</div></div>
+      <div class="stat-box"><div class="stat-val">✅</div><div class="stat-lbl">Insurance Active</div></div>
+    </div>
+  </div>`;
+  // Simulate random deviation alert
+  if(Math.random()>.6) setTimeout(()=>{
+    const el=document.getElementById('deviationAlert');
+    if(el){el.style.display='flex';showToast('⚠️ Vehicle route deviation detected');}
+  },5000);
+}
+
+function renderOwnerEarnings(){
+  const mc=document.getElementById('mainContent');
+  const weeks=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const vals=[950,1800,1200,2100,3200,4500,2800];
+  const max=Math.max(...vals);
+  mc.innerHTML=`
+  <div class="card">
+    <div class="wallet-balance">
+      <div class="wallet-amount">₦${(S.wallet+12000).toLocaleString()}</div>
+      <div class="wallet-label">Passive Earnings This Month</div>
+    </div>
+    <div class="wallet-actions">
+      <button class="btn btn-gold" onclick="">↑ Withdraw</button>
+      <button class="btn btn-outline" onclick="">📋 Statement</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Weekly Passive Income</div>
+    <div class="chart-bar-wrap">
+      ${vals.map((v,i)=>`<div class="chart-bar-col">
+        <div class="chart-bar${i===5?' highlight':''}" style="height:${Math.round(v/max*70)+10}px"></div>
+        <div class="chart-label">${weeks[i]}</div>
+      </div>`).join('')}
+    </div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-val">1</div><div class="stat-lbl">Active Vehicles</div></div>
+    <div class="stat-box"><div class="stat-val">23</div><div class="stat-lbl">Trips This Month</div></div>
+    <div class="stat-box"><div class="stat-val">25%</div><div class="stat-lbl">Owner Cut (GO)</div></div>
+    <div class="stat-box"><div class="stat-val">5%</div><div class="stat-lbl">Rebate (Assist)</div></div>
+  </div>`;
+}
+
+function renderFleet(){
+  const mc=document.getElementById('mainContent');
+  mc.innerHTML=`
+  <div class="card">
+    <div class="card-title">My Fleet</div>
+    <div style="display:flex;align-items:center;gap:.85rem;padding:.5rem 0;">
+      <div style="font-size:2rem;">🚗</div>
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:.9rem;">Toyota Camry 2020</div>
+        <div style="font-size:.72rem;color:var(--muted);">ABC-234-LG • AURAA GO + ASSIST</div>
+      </div>
+      <span class="badge badge-green">ACTIVE</span>
+    </div>
+    <div class="divider"></div>
+    <div style="display:grid;gap:.5rem;">
+      <button class="btn btn-primary">+ Add Vehicle</button>
+      <button class="btn btn-outline">⏸ Pause Vehicle</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Assigned Driver</div>
+    <div style="display:flex;align-items:center;gap:.85rem;">
+      <div style="width:40px;height:40px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;">👨‍✈️</div>
+      <div>
+        <div style="font-weight:600;font-size:.85rem;">Tolu Adesoga</div>
+        <div style="font-size:.7rem;color:var(--muted);">Verified Driver • 4.9⭐</div>
+      </div>
+      <span class="badge badge-gold" style="margin-left:auto;">ASSIGNED</span>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+// ADMIN
+// ═══════════════════════════════════════════════
+function renderAdminDash(){
+  const mc=document.getElementById('mainContent');
+  mc.innerHTML=`
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-val">247</div><div class="stat-lbl">Standby Drivers</div></div>
+    <div class="stat-box"><div class="stat-val">₦1.2M</div><div class="stat-lbl">Platform Revenue</div></div>
+    <div class="stat-box"><div class="stat-val">1,840</div><div class="stat-lbl">Total Trips</div></div>
+    <div class="stat-box"><div class="stat-val">4.8⭐</div><div class="stat-lbl">Avg Rating</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Service Split</div>
+    ${[['AURAA ASSIST','62%','badge-gold'],['AURAA GO','28%','badge-green'],['SKATE + BIKE','7%','badge-green'],['FIX-IT','3%','badge-gold']].map(([n,p,b])=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:.45rem 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:.82rem;font-weight:600;">${n}</span>
+      <span class="badge ${b}">${p}</span>
+    </div>`).join('')}
+  </div>
+  <div class="card">
+    <div class="card-title">Insurance Partner</div>
+    <div style="font-size:.82rem;line-height:1.7;">
+      <strong>Heirs Insurance Group</strong><br/>
+      <span style="color:var(--muted);">Underwriting partnership confirmed. Contact: Eunice Ukatta, Digital Products &amp; Partnerships Lead.</span>
+      <br/><span class="badge badge-green" style="margin-top:.5rem;display:inline-block;">CONFIRMED</span>
+    </div>
+  </div>`;
+}
+
+function renderAdminTrips(){
+  const mc=document.getElementById('mainContent');
+  const trips=[
+    {id:'T-0841',svc:'ASSIST',from:'VI',to:'Lekki',fare:3800,status:'completed'},
+    {id:'T-0840',svc:'GO',from:'Ikeja',to:'Maryland',fare:2600,status:'completed'},
+    {id:'T-0839',svc:'SKATE',from:'Yaba',to:'Surulere',fare:1200,status:'active'},
+    {id:'T-0838',svc:'BIKE',from:'Ojota',to:'Ketu',fare:900,status:'completed'},
+    {id:'T-0837',svc:'FIX',from:'Magodo',to:'On-site',fare:5000,status:'completed'},
+  ];
+  mc.innerHTML=`<div class="card">
+    <div class="card-title">Recent Trips</div>
+    ${trips.map(t=>`<div class="tx-row">
+      <div class="tx-info">
+        <div class="tx-title">${t.id} • ${t.svc} <span class="badge ${t.status==='active'?'badge-gold':'badge-green'}">${t.status}</span></div>
+        <div class="tx-date">${t.from} → ${t.to}</div>
+      </div>
+      <div class="tx-amount tx-credit">₦${t.fare.toLocaleString()}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderAdminRevenue(){
+  const mc=document.getElementById('mainContent');
+  mc.innerHTML=`
+  <div class="card">
+    <div class="card-title">Revenue Streams</div>
+    <div class="rev-row"><div class="rev-icon">🚗</div><div class="rev-info"><div class="rev-name">Trip Commission</div><div class="rev-desc">10% per GO/ASSIST trip</div></div><div class="rev-pct">₦840k</div></div>
+    <div class="rev-row"><div class="rev-icon">🔌</div><div class="rev-info"><div class="rev-name">Telco Fee</div><div class="rev-desc">5% identity verification</div></div><div class="rev-pct">₦180k</div></div>
+    <div class="rev-row"><div class="rev-icon">🛡️</div><div class="rev-info"><div class="rev-name">Insurance Premium</div><div class="rev-desc">Heirs Insurance Group</div></div><div class="rev-pct">₦120k</div></div>
+    <div class="rev-row"><div class="rev-icon">🔧</div><div class="rev-info"><div class="rev-name">FIX-IT Network</div><div class="rev-desc">30% roadside margin</div></div><div class="rev-pct">₦60k</div></div>
+    <div class="rev-row"><div class="rev-icon">📡</div><div class="rev-info"><div class="rev-name">SaaS / API Access</div><div class="rev-desc">Fleet operators</div></div><div class="rev-pct">₦18k</div></div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-val">₦1.2M</div><div class="stat-lbl">Total Revenue</div></div>
+    <div class="stat-box"><div class="stat-val">₦320k</div><div class="stat-lbl">Net Margin</div></div>
+  </div>`;
+}
+
+function renderAdminVisitors(){
+  const mc=document.getElementById('mainContent');
+  const visits=JSON.parse(localStorage.getItem('auraa_visit_log')||'[]');
+  mc.innerHTML=`
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-val">${S.visitCount}</div><div class="stat-lbl">Total Visits</div></div>
+    <div class="stat-box"><div class="stat-val">${visits.length}</div><div class="stat-lbl">Logged Sessions</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Visit Log</div>
+    ${visits.length?visits.slice(-10).reverse().map(v=>`<div class="visitor-row">
+      <span style="font-size:.75rem;">${v.role||'—'}</span>
+      <span style="font-size:.7rem;color:var(--muted);">${v.time}</span>
+    </div>`).join(''):`<div class="empty-state" style="padding:.75rem 0;">No visits logged yet.</div>`}
+  </div>`;
+}
+
+function trackVisit(role){
+  const log=JSON.parse(localStorage.getItem('auraa_visit_log')||'[]');
+  log.push({role,time:new Date().toLocaleString()});
+  localStorage.setItem('auraa_visit_log',JSON.stringify(log.slice(-50)));
+}
+
+function updateTicker(){
+  document.getElementById('tickerInner').textContent=
+    `🟢 Platform Live  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Insurance: Heirs Group ✅  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v10  •  AWS Amplify eu-west-2  `;
+}
+
+// ═══════════════════════════════════════════════
+// INVESTOR TAB (embedded CTA)
+// ═══════════════════════════════════════════════
+function renderInvestorTab(){
+  const mc=document.getElementById('mainContent');
+  mc.innerHTML=`
+  <div class="card" style="text-align:center;padding:2rem 1.5rem;">
+    <div style="font-size:3rem;margin-bottom:.75rem;">📊</div>
+    <div style="font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;color:var(--gold);margin-bottom:.5rem;">AURAA Investor Deck</div>
+    <div style="font-size:.8rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.6;">Pre-Seed Round • $150,000 USD<br/>15% Base + 5% Performance Equity</div>
+    <button class="btn btn-gold" onclick="showDeck()">View Investor Deck →</button>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-val">$150K</div><div class="stat-lbl">Raise Target</div></div>
+    <div class="stat-box"><div class="stat-val">20%</div><div class="stat-lbl">Equity Offered</div></div>
+    <div class="stat-box"><div class="stat-val">247</div><div class="stat-lbl">Verified Drivers</div></div>
+    <div class="stat-box"><div class="stat-val">5</div><div class="stat-lbl">Revenue Streams</div></div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+// INVESTOR DECK
+// ═══════════════════════════════════════════════
+const slides=[
+  {title:'AURAA Technologies Limited',body:`<strong>Vehicle-Centric Mobility Infrastructure</strong><br/><br/>The platform that serves Riders, Drivers, AND Vehicle Owners — simultaneously.<br/><br/>CAC Reg. No. 9058278 • Incorporated December 2025 • Lagos, Nigeria`,nda:false},
+  {title:'The Problem',body:`Lagos processes <strong>over 2 million daily commutes</strong> with no unified mobility layer.<br/><br/>• Ride-hailing ignores vehicle owners<br/>• No professional driver dispatch for personal cars<br/>• Zero embedded insurance on trips<br/>• Fragmented payments, no escrow protection`,nda:false},
+  {title:'Our Solution',body:`<strong>AURAA</strong> — Assured Urban Ride &amp; Assistance App<br/><br/>A single platform serving three stakeholders:<br/>🧍 <strong>Riders</strong> — book trips with confidence<br/>🚗 <strong>Drivers</strong> — earn on any service tier<br/>🏢 <strong>Owners</strong> — earn passively, monitor in real-time`,nda:false},
+  {title:'AURAA ASSIST — Our Global Exclusive',body:`<strong>No other platform offers this globally:</strong><br/><br/>A professional driver dispatched to operate the user's own vehicle.<br/><br/>Use cases: Night out returns, medical trips, corporate errands, elderly support.<br/><br/><strong>Split:</strong> 65% Driver • 10% Platform • 10% Insurance • 5% Rebate • 5% Telco`,nda:true},
+  {title:'5 Services. 5 Revenue Streams.',body:`• <strong>AURAA GO</strong> — Standard ride-hailing<br/>• <strong>AURAA ASSIST</strong> — Driver for your car<br/>• <strong>AURAA SKATE</strong> — Inline skater dispatch<br/>• <strong>AURAA BIKE</strong> — Motorcycle dispatch<br/>• <strong>FIX-IT NETWORK</strong> — Roadside assistance`,nda:true},
+  {title:'Market Opportunity',body:`<strong>Nigeria Transport Market: $10B+</strong><br/><br/>Lagos alone: 22M population, 2M+ daily rides<br/>Underserved: 60%+ of car owners have never used professional drivers<br/><br/><strong>AURAA Total Addressable Market: $400M+</strong>`,nda:true},
+  {title:'Traction',body:`✅ 247 verified standby drivers (skating community network)<br/>✅ MVP v10 live on AWS Amplify<br/>✅ Heirs Insurance Group — underwriting confirmed<br/>✅ Flutterwave — payment rail onboarded<br/>✅ Airtel Nigeria — M2M SIM discussions active<br/>✅ CAC registered December 2025`,nda:true},
+  {title:'Revenue Model',body:`<strong>5 streams from Day 1:</strong><br/><br/>1. Trip commissions (10% per ride)<br/>2. Telco verification fee (5%)<br/>3. Insurance premiums (Heirs partnership)<br/>4. FIX-IT Network margin (30%)<br/>5. SaaS/API access for fleet operators`,nda:true},
+  {title:'Unit Economics',body:`<strong>Sample AURAA ASSIST Trip — ₦3,800</strong><br/><br/>Driver: ₦2,470 (65%)<br/>Platform: ₦380 (10%)<br/>Insurance: ₦380 (10%)<br/>Owner Rebate: ₦190 (5%)<br/>Telco: ₦190 (5%)<br/><br/><strong>Platform net per trip: ₦380+</strong>`,nda:true},
+  {title:'The Raise',body:'',metric:'$150,000',metricLabel:'Pre-Seed Target',nda:true},
+  {title:'Equity Structure',body:`<strong>Base:</strong> 15% equity<br/><strong>Performance:</strong> 5% additional (milestone-linked)<br/><strong>Total offered:</strong> up to 20%<br/><br/>No board seat. Founder retains full operational control.<br/><br/><strong>Series A trigger:</strong> ₦150M–₦200M on Year 1 milestones`,nda:true},
+  {title:'Use of Funds',body:`<strong>$150,000 Allocation:</strong><br/><br/>• Product &amp; Engineering: 35%<br/>• Driver Acquisition &amp; Onboarding: 25%<br/>• Marketing &amp; Growth: 20%<br/>• Operations &amp; Legal: 12%<br/>• Reserve: 8%`,nda:true},
+  {title:'Competitive Advantage',body:`vs. Uber/Bolt:<br/>• AURAA ASSIST (exclusive service)<br/>• Owner dashboard (passive income layer)<br/>• Embedded insurance on every trip<br/>• Telco identity verification<br/>• Built for Africa, not adapted for it`,nda:true},
+  {title:'Partners &amp; Infrastructure',body:`🛡️ <strong>Heirs Insurance Group</strong> — Trip underwriting<br/>💳 <strong>Flutterwave</strong> — Payment escrow &amp; settlement<br/>📡 <strong>Airtel Nigeria</strong> — M2M SIM verification<br/>☁️ <strong>AWS Amplify</strong> — Hosting &amp; deployment<br/>🔗 <strong>Pi Network</strong> — Wallet integration (pipeline)`,nda:true},
+  {title:'Pi Network Opportunity',body:`Pi Network's March 2026 smart contract launch opens a new wallet economy.<br/><br/>AURAA as Pi's <strong>mobility vertical</strong>:<br/>• Daily transport spending for Pi holders<br/>• Real-world utility for 50M+ Pi wallets<br/>• First-mover advantage in African mobility`,nda:true},
+  {title:'Roadmap',body:`<strong>Q2 2026:</strong> Driver launch, first 100 trips<br/><strong>Q3 2026:</strong> Insurance API live, Assist scaling<br/><strong>Q4 2026:</strong> FIX-IT Network beta<br/><strong>Q1 2027:</strong> Series A raise ₦150M–₦200M<br/><strong>2027:</strong> Abuja, Port Harcourt expansion`,nda:true},
+  {title:'The Team',body:`<strong>Mayowa Olakunle Olawale-Great</strong><br/>Founder &amp; CEO<br/>• Koolblazes Modelling Agency (2006)<br/>• Club M experience platform (2016)<br/>• Lagos skating community (200+ driver network)<br/><br/><strong>Advisor:</strong> Ayodeji Charles Alao-Peters<br/>UK-Africa Cross-Border Investment`,nda:true},
+  {title:'Why Now?',body:`• Nigeria's ride economy is at inflection point<br/>• Insurance fintech is maturing (Heirs confirmed)<br/>• Pi Network smart contracts = new wallet economy<br/>• Post-COVID = preference for personal-vehicle trips<br/>• 247 drivers ready. MVP live. Zero delay to launch.`,nda:true},
+  {title:'Investor Pipeline',body:`✅ Pi Network Ventures — submitted<br/>✅ Future Africa / Accelerate Africa Cohort 5 — submitted<br/>✅ Ventures Platform — submitted<br/>✅ BKR Capital (Toronto) — submitted Apr 8<br/>✅ Madica/Flourish Ventures — active`,nda:true},
+  {title:'Join AURAA',body:`<strong>This is not just a ride-hailing app.</strong><br/><br/>AURAA is mobility infrastructure — built for the African city, backed by real partnerships, and powered by a community of 200+ drivers ready to launch.<br/><br/>Be part of the pre-seed round.`,metric:'',metricLabel:'',nda:true},
+];
+
+let currentSlide=0;
+
+function showDeck(){
+  if(!S.ndaPassed){renderNdaGate();document.getElementById('investorOverlay').classList.add('show');return;}
+  currentSlide=0;
+  renderDeckSlide();
+  document.getElementById('investorOverlay').classList.add('show');
+}
+
+function closeDeck(){document.getElementById('investorOverlay').classList.remove('show');}
+
+function renderNdaGate(){
+  document.getElementById('deckContent').innerHTML=`
+  <div class="nda-gate">
+    <div class="nda-icon">🔒</div>
+    <div class="nda-title">Confidential Investor Deck</div>
+    <div class="nda-text">This deck contains proprietary information protected under NDA. By proceeding, you confirm you are a qualified investor or advisor and agree to confidentiality terms.</div>
+    <div class="form-group">
+      <input class="form-input" id="ndaName" placeholder="Your Full Name"/>
+    </div>
+    <div class="form-group">
+      <input class="form-input" id="ndaEmail" placeholder="Your Email Address"/>
+    </div>
+    <button class="btn btn-gold" onclick="passNda()">I Agree — View Deck</button>
+  </div>`;
+  document.getElementById('deckProgress').textContent='NDA';
+}
+
+function passNda(){
+  const name=document.getElementById('ndaName')?.value;
+  const email=document.getElementById('ndaEmail')?.value;
+  if(!name||!email){showToast('Please enter your name and email');return;}
+  const log=JSON.parse(localStorage.getItem('auraa_nda_log')||'[]');
+  log.push({name,email,time:new Date().toLocaleString()});
+  localStorage.setItem('auraa_nda_log',JSON.stringify(log));
+  S.ndaPassed=true;
+  currentSlide=0;
+  renderDeckSlide();
+  showToast(`Welcome, ${name}. Deck unlocked.`);
+}
+
+function renderDeckSlide(){
+  const s=slides[currentSlide];
+  document.getElementById('deckProgress').textContent=`${currentSlide+1} / ${slides.length}`;
+  document.getElementById('deckContent').innerHTML=`
+  <div class="deck-slide active">
+    <div class="slide-num">SLIDE ${currentSlide+1} OF ${slides.length}</div>
+    <div class="slide-title">${s.title}</div>
+    ${s.metric?`<div class="slide-metric">${s.metric}</div><div class="slide-metric-label">${s.metricLabel}</div>`:''}
+    <div class="slide-body">${s.body}</div>
+  </div>`;
+}
+
+function nextSlide(){if(currentSlide<slides.length-1){currentSlide++;renderDeckSlide();}}
+function prevSlide(){if(currentSlide>0){currentSlide--;renderDeckSlide();}}
+
+function ctaAction(type){
+  const msgs={deck:'Full deck request noted. We\'ll send it to your email.',call:'Call request submitted. Expect a response within 24 hours.',allocation:'Early allocation interest noted. Our team will reach out.'};
+  showToast(msgs[type]||'Noted!');
+  const log=JSON.parse(localStorage.getItem('auraa_cta_log')||'[]');
+  log.push({type,time:new Date().toLocaleString()});
+  localStorage.setItem('auraa_cta_log',JSON.stringify(log));
+}
+
+// ═══════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════
+function getTxLog(){return JSON.parse(localStorage.getItem('auraa_tx')||'[]');}
+function logTx(tx){
+  const log=getTxLog();
+  log.unshift({...tx,date:new Date().toLocaleTimeString()});
+  localStorage.setItem('auraa_tx',JSON.stringify(log.slice(0,50)));
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+function toggleTheme(){
+  S.dark=!S.dark;
+  document.body.classList.toggle('light-mode',!S.dark);
+}
+
+// Triple-tap logo for admin hint
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('headerLogo').addEventListener('click',()=>{
+    S.logoTaps++;
+    clearTimeout(S.logoTapTimer);
+    S.logoTapTimer=setTimeout(()=>S.logoTaps=0,1000);
+    if(S.logoTaps>=3){showToast('Admin: Use role selector → Admin');S.logoTaps=0;}
+  });
+});
+</script>
 </body>
 </html>
