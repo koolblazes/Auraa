@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v10.2</title>
+<title>AURAA Technologies — MVP v10.4</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root {
@@ -266,7 +266,7 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
 <div id="splash" onclick="hideSplash()">
   <div class="splash-logo">AURAA</div>
   <div class="splash-sub">Technologies Limited</div>
-  <div class="splash-tagline">Assured Urban Ride Assistance &amp; Assistance — Redefining mobility infrastructure across Africa</div>
+  <div class="splash-tagline">Assured Urban Ride &amp; Assistance — Redefining mobility infrastructure across Africa</div>
   <div class="splash-tap">TAP TO ENTER</div>
 </div>
 
@@ -349,9 +349,9 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
       <button class="deck-nav-btn" onclick="nextSlide()">Next →</button>
     </div>
     <div class="deck-cta">
-      <button class="btn btn-gold btn-sm" onclick="ctaAction('whatsapp',currentDeckType)">💬 WhatsApp Mayowa</button>
-      <button class="btn btn-primary btn-sm" onclick="ctaAction('email',currentDeckType)">📧 Send Email</button>
-      <button class="btn btn-outline btn-sm" onclick="ctaAction('allocation',currentDeckType)">🔑 Express Interest</button>
+      <button class="btn btn-gold btn-sm" onclick="ctaAction('allocation',currentDeckType)">🔑 Join Allocation</button>
+      <button class="btn btn-primary btn-sm" onclick="ctaAction('call',currentDeckType)">📞 Schedule a Call</button>
+      <button class="btn btn-outline btn-sm" onclick="ctaAction('deck',currentDeckType)">📥 Request Full Deck</button>
     </div>
   </div>
 </div>
@@ -440,7 +440,11 @@ function selectRole(role){
 const roleLabels = {rider:'Rider',driver:'Driver',owner:'Vehicle Owner',admin:'Admin'};
 
 function logout(){
-  S.role=null; S.tab=0; S.tripState='idle';
+  S.role=null; S.tab=0; S.tripState='idle'; S.tripProgress=0;
+  if(S.progressTimer) clearInterval(S.progressTimer);
+  Object.values(countdownTimers).forEach(iv=>clearInterval(iv));
+  countdownTimers={};
+  activeRequests=[1,2,3];
   document.getElementById('appHeader').classList.remove('show');
   document.getElementById('tabBar').classList.remove('show');
   document.getElementById('mainContent').classList.remove('show');
@@ -527,8 +531,12 @@ function svcDesc(s){
 
 function setService(s){
   S.service=s;
-  document.querySelectorAll('.pill').forEach((p,i)=>p.classList.toggle('active',['assist','go','skate','bike','fix'][i]===s));
-  document.getElementById('svcDesc').innerHTML=svcDesc(s);
+  // Save dropoff value before re-render
+  const dropoff=document.getElementById('dropoff')?.value||'';
+  renderBook();
+  // Restore dropoff value after re-render
+  const df=document.getElementById('dropoff');
+  if(df && dropoff) df.value=dropoff;
 }
 
 function calcFare(){
@@ -631,7 +639,7 @@ function completeTrip(){
 // RIDER — MY TRIPS
 // ═══════════════════════════════════════════════
 function renderMyTrips(){
-  const trips=getTxLog().filter(t=>t.type==='debit');
+  const trips=getTxLog().filter(t=>t.type==='debit'&&t.title.includes('AURAA'));
   const mc=document.getElementById('mainContent');
   if(!trips.length){
     mc.innerHTML=`<div class="empty-state"><div class="empty-icon">🚗</div>No trips yet. Book your first ride!</div>`;
@@ -639,7 +647,13 @@ function renderMyTrips(){
   }
   mc.innerHTML=`<div class="card"><div class="card-title">Trip History</div>${
     trips.map(t=>`<div class="tx-row">
-      <div class="tx-info"><div class="tx-title">${t.title}</div><div class="tx-date">${t.date}</div></div>
+      <div class="tx-info">
+        <div class="tx-title" style="font-weight:600;">${t.title}</div>
+        <div class="tx-date" style="display:flex;gap:.5rem;align-items:center;">
+          <span>${t.date}</span>
+          <span class="badge badge-green" style="font-size:.6rem;">COMPLETED</span>
+        </div>
+      </div>
       <div class="tx-amount tx-debit">−₦${Math.abs(t.amount).toLocaleString()}</div>
     </div>`).join('')
   }</div>`;
@@ -760,14 +774,17 @@ function removeTrip(id, accepted){
   setTimeout(()=>{
     activeRequests=activeRequests.filter(x=>x!==id);
     clearInterval(countdownTimers[id]);
-    // Bring in a new trip after 5 seconds if available
     if(accepted){
       setTimeout(()=>{
         const available=allPossibleTrips.filter(r=>!activeRequests.includes(r.id));
-        if(available.length && activeRequests.length<3){
-          activeRequests.push(available[0].id);
-          renderDriverTrips();
-          showToast('New trip request incoming!');
+        if(activeRequests.length<3){
+          // If no more new trips, cycle back from the beginning
+          const nextId = available.length ? available[0].id : allPossibleTrips[0].id;
+          if(!activeRequests.includes(nextId)){
+            activeRequests.push(nextId);
+            renderDriverTrips();
+            showToast('New trip request incoming!');
+          }
         }
       },5000);
     }
@@ -801,7 +818,7 @@ function renderDriverEarnings(){
     </div>
     <div class="wallet-actions">
       <button class="btn btn-gold" onclick="withdrawWallet()">↑ Withdraw</button>
-      <button class="btn btn-outline" onclick="">📋 Statement</button>
+      <button class="btn btn-outline" onclick="showToast('Statement download coming soon')">📋 Statement</button>
     </div>
   </div>
   <div class="card">
@@ -879,11 +896,17 @@ function renderOwnerMonitor(){
       <div class="stat-box"><div class="stat-val">✅</div><div class="stat-lbl">Insurance Active</div></div>
     </div>
   </div>`;
-  // Simulate random deviation alert
-  if(Math.random()>.6) setTimeout(()=>{
+  // Always fire deviation alert after 8 seconds for demo consistency
+  setTimeout(()=>{
     const el=document.getElementById('deviationAlert');
     if(el){el.style.display='flex';showToast('⚠️ Vehicle route deviation detected');}
-  },5000);
+  },8000);
+}
+
+function ownerWithdraw(){
+  const earnings=S.wallet+12000;
+  if(earnings<1000){showToast('No earnings to withdraw yet');return;}
+  showToast('₦5,000 withdrawal initiated to your bank account');
 }
 
 function renderOwnerEarnings(){
@@ -898,8 +921,8 @@ function renderOwnerEarnings(){
       <div class="wallet-label">Passive Earnings This Month</div>
     </div>
     <div class="wallet-actions">
-      <button class="btn btn-gold" onclick="">↑ Withdraw</button>
-      <button class="btn btn-outline" onclick="">📋 Statement</button>
+      <button class="btn btn-gold" onclick="ownerWithdraw()">↑ Withdraw</button>
+      <button class="btn btn-outline" onclick="showToast('Statement download coming soon')">📋 Statement</button>
     </div>
   </div>
   <div class="card">
@@ -934,8 +957,8 @@ function renderFleet(){
     </div>
     <div class="divider"></div>
     <div style="display:grid;gap:.5rem;">
-      <button class="btn btn-primary">+ Add Vehicle</button>
-      <button class="btn btn-outline">⏸ Pause Vehicle</button>
+      <button class="btn btn-primary" onclick="showToast('Vehicle registration coming soon')">+ Add Vehicle</button>
+      <button class="btn btn-outline" onclick="showToast('Vehicle paused. Driver notified.')">⏸ Pause Vehicle</button>
     </div>
   </div>
   <div class="card">
@@ -1067,7 +1090,7 @@ function trackVisit(role){
 
 function updateTicker(){
   document.getElementById('tickerInner').textContent=
-    `🟢 Platform Live  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Insurance: Heirs Group ✅  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v10.2  •  VC Raise: $200K SAFE  •  HNI Pool: ₦85M • 4 Slots  •  AWS Amplify eu-west-2  `;
+    `🟢 Platform Live  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Insurance: Heirs Group ✅  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v10.4  •  VC Raise: $200K SAFE  •  HNI Pool: ₦85M • 4 Slots  •  AWS Amplify eu-west-2  `;
 }
 
 // ═══════════════════════════════════════════════
@@ -1104,23 +1127,26 @@ const vcSlides=[
   {title:'AURAA Technologies Limited',body:`<strong>Be Safe. Be Unstoppable.</strong><br/><br/>The first multi-modal mobility platform that moves people, vehicles, and assets — intelligently.<br/><br/>CAC Reg. No. 9058278 • Incorporated December 2025 • Lagos, Nigeria`},
   {title:'The Problem',body:`Urban mobility is broken beyond rides.<br/><br/>• Millions own cars but cannot always drive them<br/>• No platform connects vehicle owners, drivers &amp; movement needs<br/>• Drunk, tired, or unwell drivers = real safety risk<br/>• Vehicles sit idle while drivers lack access to assets<br/><br/><strong>The gap: No single platform solves the owner-driver-rider triangle.</strong>`},
   {title:'The Insight',body:`<strong>Mobility isn't about rides. It's about control.</strong><br/><br/>People don't just want to move...<br/>👉 They want to move on their own terms<br/>👉 With their own assets<br/>👉 With trusted human support<br/><br/>AURAA is built on this insight.`},
-  {title:'The Solution',body:`<strong>AURAA is a mobility operating system.</strong><br/><br/>Not ride-hailing. AURAA enables:<br/>• Movement of people<br/>• Movement of their own vehicles<br/>• Movement of goods<br/><br/>All from one platform. One wallet. One trust layer.`},
+  {title:'The Solution',body:`<strong>AURAA is a new economic layer around vehicles.</strong><br/><br/>Not ride-hailing. AURAA enables:<br/>• Movement of people<br/>• Movement of their own vehicles<br/>• Movement of goods<br/><br/>All from one platform. One wallet. One trust layer.`},
   {title:'AURAA ASSIST — Our Global Exclusive',body:`<strong>A driver comes to you — and drives YOUR car.</strong><br/><br/>No other platform offers this globally.<br/><br/>Use cases: Night out returns, medical trips, corporate errands, elderly support, early morning flights.<br/><br/>• No vehicle abandonment<br/>• Full owner control retained<br/>• Split: 65% Driver • 10% Platform • 10% Insurance • 5% Rebate • 5% Telco`},
   {title:'Full Service Ecosystem',body:`🚗 <strong>AURAA GO</strong> — Standard ride-hailing<br/>🛻 <strong>AURAA ASSIST</strong> — Driver operates your car<br/>🛼 <strong>AURAA SKATE</strong> — Inline skater dispatch<br/>🏍 <strong>AURAA BIKE</strong> — Motorcycle dispatch<br/>🔧 <strong>FIX-IT NETWORK</strong> — Roadside assistance<br/><br/>⚡ Skaters double as ASSIST drivers — asset efficiency built in.`},
   {title:'Owner ↔ Driver Merge',body:`<strong>AURAA unlocks idle vehicles.</strong><br/><br/>Owners list vehicles → assign drivers → set availability → pause anytime.<br/><br/>Turns every parked car into an income-generating asset.<br/><br/>AURAA GO split: <strong>Driver 55% • Owner 25% • Platform 10%</strong><br/>Highest operator split of any platform in Africa.`},
   {title:'How It Works',body:`1. User selects service<br/>2. Inputs pickup + destination<br/>3. System matches correct driver type<br/>4. Driver accepts manually<br/>5. Trip executes with live tracking<br/>6. Payment auto-split via Flutterwave escrow<br/><br/>Transparent. Controlled. Scalable.`},
+  {title:'Trust &amp; Safety Layer',body:`<strong>Every trip is protected end-to-end.</strong><br/><br/>🔐 <strong>Driver Verification</strong><br/>CAC identity check + Airtel Nigeria M2M SIM biometric confirmation + community referral (skating network)<br/><br/>🛡️ <strong>Insurance Layer</strong><br/>Heirs Insurance Group underwrites every trip — vehicle, passenger, and third-party liability<br/><br/>📋 <strong>Trip Logging</strong><br/>Every trip timestamped, route-recorded, and stored for claims, audits, and disputes<br/><br/>🚨 <strong>Emergency Escalation</strong><br/>In-app distress signal → notifies AURAA operations + owner + emergency contact<br/><br/><strong>Trust is not a feature. It is the infrastructure.</strong>`},
+  {title:'Why We Win — Defensibility',body:`<strong>"What stops Uber from copying this?"</strong><br/><br/>Short answer: They can't execute what we've already built.<br/><br/>🔒 <strong>ASSIST logistics complexity</strong> — dispatching a driver to operate someone else's personal vehicle requires identity verification, insurance underwriting, owner consent logic, and vehicle matching. Uber's architecture is built for driver-owned vehicles only.<br/><br/>🤝 <strong>Owner-driver relationship layer</strong> — Uber has zero vehicle owner incentive. Our owners earn 25% passively. That loyalty is structural, not promotional.<br/><br/>🌍 <strong>Cultural + behavioural moat</strong> — AURAA is built for how Nigerians actually live: party returns, shared family cars, fear of vehicle abandonment. Uber doesn't understand this context. We live in it.<br/><br/>⚡ <strong>Local execution advantage</strong> — 247 verified drivers from a real social network, assembled before funding. Uber can't replicate community trust with a marketing budget.`},
   {title:'Unit Economics',body:`<strong>Sample AURAA ASSIST Trip — ₦3,800</strong><br/><br/>Driver: ₦2,470 (65%)<br/>Platform: ₦380 (10%)<br/>Insurance: ₦380 (10%)<br/>Owner Rebate: ₦190 (5%)<br/>Telco: ₦190 (5%)<br/><br/><strong>Platform net per trip: ₦380 minimum</strong><br/>At 500 trips/day: ₦190,000/day platform revenue`},
   {title:'Go-To-Market',body:`<strong>Lagos First. Then Africa.</strong><br/><br/>Phase 1 (Q2 2026): Victoria Island corridor — 247 verified drivers ready<br/>Phase 2 (Q3 2026): Lekki, Ikeja, Surulere expansion<br/>Phase 3 (Q1 2027): Abuja + Port Harcourt<br/>Phase 4 (2027): Pan-African rollout<br/><br/>Niche launch = controlled quality = trust at scale.`},
-  {title:'Traction',body:`✅ 247 verified standby drivers (skating community network)<br/>✅ MVP v10.1 live on AWS Amplify<br/>✅ Heirs Insurance Group — underwriting interest confirmed<br/>✅ Flutterwave — payment rail onboarded<br/>✅ Airtel Nigeria — M2M SIM discussions active<br/>✅ CAC registered December 2025<br/>✅ Pi Network Ventures, Future Africa, Ventures Platform — submitted`},
+  {title:'Traction',body:`✅ 247 verified standby drivers (skating community network)<br/>✅ MVP v10.3 live on AWS Amplify<br/>✅ Heirs Insurance Group — underwriting interest confirmed<br/>✅ Flutterwave — payment rail onboarded<br/>✅ Airtel Nigeria — M2M SIM discussions active<br/>✅ CAC registered December 2025<br/>✅ Pi Network Ventures, Future Africa, Ventures Platform, BKR Capital, Madica — submitted`},
   {title:'Revenue Model',body:`<strong>5 streams from Day 1:</strong><br/><br/>1. Trip commissions (10% per ride)<br/>2. Telco verification fee (5% per trip)<br/>3. Insurance premiums (Heirs Group partnership)<br/>4. FIX-IT Network margin (30%)<br/>5. SaaS/API fleet operator access<br/><br/>Multiple recurring revenue layers — not a single-stream bet.`},
-  {title:'Risk &amp; Mitigation',body:`<strong>Risk: Driver trust</strong> → Mitigation: CAC verification + telco ID + rating system<br/><br/><strong>Risk: Adoption speed</strong> → Mitigation: Niche VI launch with pre-verified network<br/><br/><strong>Risk: Insurance claims</strong> → Mitigation: Heirs Group partnership + trip logging<br/><br/><strong>Risk: Competition</strong> → Mitigation: AURAA ASSIST is globally exclusive — no comparable product exists.`},
+  {title:'Risk &amp; Mitigation',body:`<strong>Risk: Driver trust</strong> → Mitigation: CAC verification + telco ID + rating system<br/><br/><strong>Risk: Adoption speed</strong> → Mitigation: Niche VI launch with pre-verified network<br/><br/><strong>Risk: Insurance claims</strong> → Mitigation: Heirs Group partnership + full trip logging<br/><br/><strong>Risk: Competition</strong> → Mitigation: AURAA ASSIST is globally exclusive — Uber's architecture cannot replicate it.`},
   {title:'Strategic Partners',body:`🛡️ <strong>Heirs Insurance Group</strong> — Trip underwriting (confirmed interest)<br/>💳 <strong>Flutterwave</strong> — Payment escrow &amp; settlement (onboarded)<br/>📡 <strong>Airtel Nigeria</strong> — M2M SIM verification (engaged)<br/>☁️ <strong>AWS Amplify</strong> — Hosting &amp; deployment (live)<br/>🔗 <strong>Pi Network</strong> — Wallet integration (pipeline)`},
   {title:'Pi Network Opportunity',body:`Pi Network's March 2026 smart contract launch opens a new wallet economy.<br/><br/>AURAA as Pi's <strong>mobility vertical</strong>:<br/>• Daily transport spending for 50M+ Pi wallet holders<br/>• Real-world utility activates dormant Pi ecosystem<br/>• First-mover advantage in African mobility on Pi<br/><br/>AURAA + Pi = mass adoption catalyst.`},
   {title:'The Raise',body:`<strong>$200,000 USD — Pre-Seed SAFE Note</strong><br/><br/>Pre-Money Cap: ₦1.2B–₦1.5B<br/>Instrument: SAFE (Simple Agreement for Future Equity)<br/>Base Equity: 15% | Performance Equity: +5% (milestone-linked)<br/>No board seat. Founder retains full control.<br/>Converts at next priced round.`,metric:'$200,000',metricLabel:'Pre-Seed SAFE · No Board Seat'},
   {title:'Use of Funds',body:`<strong>$200,000 Allocation:</strong><br/><br/>• Engineering &amp; Mobile Apps: 40%<br/>• Driver Acquisition &amp; Onboarding: 25%<br/>• Insurance &amp; Telco Integration: 20%<br/>• Marketing &amp; Growth: 10%<br/>• Legal &amp; Operations: 5%`},
   {title:'Roadmap',body:`<strong>Q2 2026:</strong> Driver launch, first 100 trips, VI corridor<br/><strong>Q3 2026:</strong> Insurance API live, ASSIST scaling, 1,000 trips<br/><strong>Q4 2026:</strong> FIX-IT Network beta, Ikeja + Lekki<br/><strong>Q1 2027:</strong> Series A raise ₦150M–₦200M<br/><strong>2027:</strong> Abuja, Port Harcourt, Accra`},
-  {title:'The Founder',body:`<strong>Mayowa Olakunle Olawale-Great</strong><br/>Founder &amp; CEO<br/><br/>• 20+ years entrepreneurial track record<br/>• Koolblazes Modelling Agency — founded 2006<br/>• Club M entertainment platform — founded 2016<br/>• Built AURAA from concept to live MVP in under 6 months<br/>• Lagos skating community: 200+ verified driver network<br/><br/><strong>Advisor:</strong> Ayodeji Charles Alao-Peters — UK-Africa Cross-Border Investment`},
+  {title:'The Founder',body:`<strong>Mayowa Olakunle Olawale-Great</strong><br/>Founder &amp; CEO, AURAA Technologies Limited<br/><br/>I have spent 20+ years operating across the exact layers this system connects — people, logistics, and execution.<br/><br/>• Koolblazes Modelling Agency (2006) — talent, trust, and human logistics<br/>• Club M (2016) — experience infrastructure and community monetisation<br/>• AURAA (2025) — mobility infrastructure built on lived Lagos knowledge<br/><br/>I didn't study this market. I live in it. I built a network of 247 verified drivers before asking anyone for money. I secured insurance and payment partnerships before writing a pitch deck.<br/><br/><strong>I execute first. Then I ask.</strong><br/><br/>Advisor: Ayodeji Charles Alao-Peters — UK-Africa Cross-Border Investment`},
   {title:'Why Now?',body:`• Nigeria's ride economy is at inflection point<br/>• Insurance fintech maturing — Heirs confirmed<br/>• Pi Network smart contracts = new wallet economy<br/>• Post-COVID preference for personal-vehicle control<br/>• 247 drivers ready. MVP live. Capital is the only missing piece.<br/><br/><strong>The window is open. AURAA is ready to move.</strong>`},
+  {title:'Join AURAA — Choose Your Path',body:`<strong>Three clear ways to move forward:</strong><br/><br/>🔑 <strong>Join Allocation</strong> — Commit to the pre-seed round. SAFE note, $200K target, 15% base equity. No board seat.<br/><br/>📞 <strong>Schedule a Call</strong> — 30-minute founder call. Bring your questions. Leave with answers.<br/><br/>📥 <strong>Request Full Deck</strong> — Full financial model, cap table, and legal term sheet sent directly.<br/><br/><strong>Use the buttons below to take the next step now.</strong>`},
 ];
 
 const hniSlides=[
@@ -1200,9 +1226,9 @@ function renderDeckSlide(){
       <div style="color:var(--muted);margin-top:.2rem;">👁 Last access: ${Math.floor(Math.random()*15)+2} mins ago</div>
     </div>`:''}
     ${isLast?`<div style="margin-top:1rem;display:grid;gap:.5rem;">
-      <button class="btn btn-gold btn-sm" onclick="ctaAction('whatsapp','${currentDeckType}')">💬 Message on WhatsApp</button>
-      <button class="btn btn-primary btn-sm" onclick="ctaAction('email','${currentDeckType}')">📧 Send Email</button>
-      <button class="btn btn-outline btn-sm" onclick="ctaAction('allocation','${currentDeckType}')">🔑 Express Interest</button>
+      <button class="btn btn-gold btn-sm" onclick="ctaAction('allocation','${currentDeckType}')">🔑 Join Allocation</button>
+      <button class="btn btn-primary btn-sm" onclick="ctaAction('call','${currentDeckType}')">📞 Schedule a Call</button>
+      <button class="btn btn-outline btn-sm" onclick="ctaAction('deck','${currentDeckType}')">📥 Request Full Deck</button>
     </div>`:''}
   </div>`;
 }
@@ -1217,12 +1243,16 @@ function ctaAction(type,deckType){
   const log=JSON.parse(localStorage.getItem('auraa_cta_log')||'[]');
   log.push({type,deckType,time:new Date().toLocaleString()});
   localStorage.setItem('auraa_cta_log',JSON.stringify(log));
-  if(type==='whatsapp'){
-    window.open('https://wa.me/2348027641047?text=Hi%20Mayowa%2C%20I%20viewed%20the%20AURAA%20'+encodeURIComponent(deckType==='hni'?'HNI':'investor')+'%20deck%20and%20I%27d%20like%20to%20discuss%20further.','_blank');
+  if(type==='allocation'){
+    window.open('https://wa.me/2348027641047?text=Hi%20Mayowa%2C%20I%20viewed%20the%20AURAA%20'+encodeURIComponent(deckType==='hni'?'HNI Founding Partner':'VC')+'%20deck%20and%20I%27d%20like%20to%20join%20the%20allocation.','_blank');
+  } else if(type==='call'){
+    window.open('https://wa.me/2348027641047?text=Hi%20Mayowa%2C%20I%27d%20like%20to%20schedule%20a%20call%20to%20discuss%20AURAA.','_blank');
+  } else if(type==='deck'){
+    window.open('mailto:auraa.hq@gmail.com?subject=AURAA%20Full%20Deck%20Request%20('+(deckType==='hni'?'HNI':'VC')+')&body=Hi%20Mayowa%2C%20I%20reviewed%20the%20AURAA%20deck%20and%20would%20like%20the%20full%20financial%20model%20and%20term%20sheet.','_blank');
+  } else if(type==='whatsapp'){
+    window.open('https://wa.me/2348027641047?text=Hi%20Mayowa%2C%20I%20viewed%20the%20AURAA%20deck%20and%20I%27d%20like%20to%20discuss%20further.','_blank');
   } else if(type==='email'){
-    window.open('mailto:auraa.hq@gmail.com?subject=AURAA%20Investment%20Enquiry%20('+(deckType==='hni'?'HNI':'VC')+'%20Deck)&body=Hi%20Mayowa%2C%20I%20reviewed%20the%20AURAA%20deck%20and%20would%20like%20to%20discuss%20next%20steps.','_blank');
-  } else if(type==='allocation'){
-    showToast('Interest recorded. Mayowa will contact you within 24 hours.');
+    window.open('mailto:auraa.hq@gmail.com?subject=AURAA%20Investment%20Enquiry&body=Hi%20Mayowa%2C%20I%20reviewed%20the%20AURAA%20deck%20and%20would%20like%20to%20discuss%20next%20steps.','_blank');
   }
 }
 
