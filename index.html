@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v10</title>
+<title>AURAA Technologies — MVP v10.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root {
@@ -48,6 +48,17 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
 .role-icon{font-size:2rem;margin-bottom:.75rem;}
 .role-name{font-family:'Syne',sans-serif;font-size:.95rem;font-weight:700;color:var(--text);}
 .role-desc{font-size:.72rem;color:var(--muted);margin-top:.3rem;}
+
+/* ADMIN CODE GATE */
+#adminGate{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:none;align-items:center;justify-content:center;padding:2rem;}
+#adminGate.show{display:flex;}
+.admin-gate-box{background:var(--dark2);border:1px solid var(--border);border-radius:20px;padding:2rem 1.5rem;width:100%;max-width:340px;text-align:center;}
+.admin-gate-icon{font-size:2.5rem;margin-bottom:.75rem;}
+.admin-gate-title{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;color:var(--gold);margin-bottom:.4rem;}
+.admin-gate-sub{font-size:.78rem;color:var(--muted);margin-bottom:1.25rem;}
+.role-card.investor-card{border-color:var(--gold);background:linear-gradient(135deg,rgba(201,168,76,.08),rgba(201,168,76,.03));}
+.role-card.locked{opacity:.7;position:relative;}
+.lock-icon{position:absolute;top:.5rem;right:.5rem;font-size:.75rem;}
 
 /* HEADER */
 #appHeader{background:var(--dark2);border-bottom:1px solid var(--border);padding:.75rem 1rem;display:none;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
@@ -279,10 +290,18 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
       <div class="role-name">Vehicle Owner</div>
       <div class="role-desc">Monitor &amp; earn passively</div>
     </div>
-    <div class="role-card" onclick="selectRole('admin')">
+    <div class="role-card locked" onclick="showAdminGate()">
+      <div class="lock-icon">🔒</div>
       <div class="role-icon">⚙️</div>
       <div class="role-name">Admin</div>
-      <div class="role-desc">Platform overview</div>
+      <div class="role-desc">Restricted access</div>
+    </div>
+  </div>
+  <div style="width:100%;max-width:380px;margin-top:.75rem;">
+    <div class="role-card investor-card" onclick="showDeck()">
+      <div class="role-icon">📊</div>
+      <div class="role-name">Investor Deck</div>
+      <div class="role-desc">Pre-Seed • $150K • NDA Protected</div>
     </div>
   </div>
 </div>
@@ -316,7 +335,7 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
 <div class="toast" id="toast"></div>
 
 <!-- INVESTOR DECK OVERLAY -->
-<div id="investorOverlay">
+<div id="investorOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:10001;display:none;align-items:center;justify-content:center;padding:1rem;">
   <div class="deck-modal">
     <button class="deck-close" onclick="closeDeck()">✕</button>
     <div id="deckContent"></div>
@@ -329,6 +348,22 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
       <button class="btn btn-gold btn-sm" onclick="ctaAction('deck')">📥 Request Full Deck</button>
       <button class="btn btn-primary btn-sm" onclick="ctaAction('call')">📞 Schedule a Call</button>
       <button class="btn btn-outline btn-sm" onclick="ctaAction('allocation')">🔑 Early Allocation</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN GATE -->
+<div id="adminGate">
+  <div class="admin-gate-box">
+    <div class="admin-gate-icon">🔐</div>
+    <div class="admin-gate-title">Admin Access</div>
+    <div class="admin-gate-sub">Enter your access code to continue</div>
+    <div class="form-group">
+      <input class="form-input" id="adminCodeInput" placeholder="Enter access code" type="password"/>
+    </div>
+    <button class="btn btn-gold" onclick="verifyAdminCode()">Verify &amp; Enter</button>
+    <div style="margin-top:.75rem;">
+      <button class="btn btn-outline btn-sm" onclick="closeAdminGate()">Cancel</button>
     </div>
   </div>
 </div>
@@ -358,6 +393,25 @@ localStorage.setItem('auraa_visits', S.visitCount);
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
+function showAdminGate(){
+  document.getElementById('adminGate').classList.add('show');
+  setTimeout(()=>document.getElementById('adminCodeInput').focus(),300);
+}
+function closeAdminGate(){
+  document.getElementById('adminGate').classList.remove('show');
+  document.getElementById('adminCodeInput').value='';
+}
+function verifyAdminCode(){
+  const code=document.getElementById('adminCodeInput').value.trim();
+  if(code==='UZOMA-AURAA-001'){
+    closeAdminGate();
+    selectRole('admin');
+  } else {
+    showToast('Invalid access code');
+    document.getElementById('adminCodeInput').value='';
+  }
+}
+
 function hideSplash(){
   document.getElementById('splash').classList.add('hidden');
   setTimeout(()=>{
@@ -999,13 +1053,14 @@ const slides=[
 let currentSlide=0;
 
 function showDeck(){
-  if(!S.ndaPassed){renderNdaGate();document.getElementById('investorOverlay').classList.add('show');return;}
+  const overlay=document.getElementById('investorOverlay');
+  if(!S.ndaPassed){renderNdaGate();overlay.style.display='flex';return;}
   currentSlide=0;
   renderDeckSlide();
-  document.getElementById('investorOverlay').classList.add('show');
+  overlay.style.display='flex';
 }
 
-function closeDeck(){document.getElementById('investorOverlay').classList.remove('show');}
+function closeDeck(){document.getElementById('investorOverlay').style.display='none';}
 
 function renderNdaGate(){
   document.getElementById('deckContent').innerHTML=`
