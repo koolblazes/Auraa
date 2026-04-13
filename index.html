@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v10.1</title>
+<title>AURAA Technologies — MVP v10.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root {
@@ -298,10 +298,14 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
     </div>
   </div>
   <div style="width:100%;max-width:380px;margin-top:.75rem;">
-    <div class="role-card investor-card" onclick="showDeck()">
-      <div class="role-icon">📊</div>
-      <div class="role-name">Investor Deck</div>
-      <div class="role-desc">Pre-Seed • $150K • NDA Protected</div>
+    <div class="role-card investor-card" style="display:grid;gap:.5rem;">
+      <div style="font-size:2rem;text-align:center;">📊</div>
+      <div class="role-name" style="text-align:center;">Investor Access</div>
+      <div class="role-desc" style="text-align:center;">Pre-Seed • NDA Protected</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.25rem;">
+        <button class="btn btn-gold btn-sm" onclick="showDeck('vc')">🏦 VC Deck</button>
+        <button class="btn btn-primary btn-sm" onclick="showDeck('hni')">👤 HNI Deck</button>
+      </div>
     </div>
   </div>
 </div>
@@ -345,9 +349,9 @@ body.light-mode{--dark:#f4f4f4;--dark2:#e8e8e8;--dark3:#dddddd;--card:#ffffff;--
       <button class="deck-nav-btn" onclick="nextSlide()">Next →</button>
     </div>
     <div class="deck-cta">
-      <button class="btn btn-gold btn-sm" onclick="ctaAction('deck')">📥 Request Full Deck</button>
-      <button class="btn btn-primary btn-sm" onclick="ctaAction('call')">📞 Schedule a Call</button>
-      <button class="btn btn-outline btn-sm" onclick="ctaAction('allocation')">🔑 Early Allocation</button>
+      <button class="btn btn-gold btn-sm" onclick="ctaAction('whatsapp',currentDeckType)">💬 WhatsApp Mayowa</button>
+      <button class="btn btn-primary btn-sm" onclick="ctaAction('email',currentDeckType)">📧 Send Email</button>
+      <button class="btn btn-outline btn-sm" onclick="ctaAction('allocation',currentDeckType)">🔑 Express Interest</button>
     </div>
   </div>
 </div>
@@ -979,17 +983,40 @@ function renderAdminRevenue(){
 function renderAdminVisitors(){
   const mc=document.getElementById('mainContent');
   const visits=JSON.parse(localStorage.getItem('auraa_visit_log')||'[]');
+  const ndas=JSON.parse(localStorage.getItem('auraa_nda_log')||'[]');
+  const ctas=JSON.parse(localStorage.getItem('auraa_cta_log')||'[]');
+
+  // Merge all into one unified log
+  const all=[
+    ...visits.map(v=>({type:'👤 Role Entry',detail:v.role||'unknown',time:v.time,tag:'badge-green'})),
+    ...ndas.map(v=>({type:'🔒 NDA Signed',detail:`${v.name} · ${v.email}${v.org?' · '+v.org:''} · ${v.type||'vc'} deck`,time:v.time,tag:'badge-gold'})),
+    ...ctas.map(v=>({type:'🔑 CTA Action',detail:`${v.type} · ${v.deckType||'—'} deck`,time:v.time,tag:'badge-green'})),
+  ].sort((a,b)=>new Date(b.time)-new Date(a.time));
+
   mc.innerHTML=`
   <div class="stats-grid">
     <div class="stat-box"><div class="stat-val">${S.visitCount}</div><div class="stat-lbl">Total Visits</div></div>
-    <div class="stat-box"><div class="stat-val">${visits.length}</div><div class="stat-lbl">Logged Sessions</div></div>
+    <div class="stat-box"><div class="stat-val">${ndas.length}</div><div class="stat-lbl">NDAs Signed</div></div>
+    <div class="stat-box"><div class="stat-val">${ctas.length}</div><div class="stat-lbl">CTA Actions</div></div>
+    <div class="stat-box"><div class="stat-val">${visits.length}</div><div class="stat-lbl">Role Sessions</div></div>
   </div>
   <div class="card">
-    <div class="card-title">Visit Log</div>
-    ${visits.length?visits.slice(-10).reverse().map(v=>`<div class="visitor-row">
-      <span style="font-size:.75rem;">${v.role||'—'}</span>
-      <span style="font-size:.7rem;color:var(--muted);">${v.time}</span>
-    </div>`).join(''):`<div class="empty-state" style="padding:.75rem 0;">No visits logged yet.</div>`}
+    <div class="card-title">All Activity Log</div>
+    ${all.length?all.slice(0,30).map(e=>`<div class="tx-row">
+      <div class="tx-info">
+        <div class="tx-title">${e.type} <span class="badge ${e.tag}" style="font-size:.6rem;">${e.detail}</span></div>
+        <div class="tx-date">${e.time}</div>
+      </div>
+    </div>`).join(''):`<div class="empty-state" style="padding:.75rem 0;">No activity yet.</div>`}
+  </div>
+  <div class="card">
+    <div class="card-title">NDA Signees — Investor Leads</div>
+    ${ndas.length?ndas.map(n=>`<div class="tx-row">
+      <div class="tx-info">
+        <div class="tx-title" style="font-weight:600;">${n.name}</div>
+        <div class="tx-date">${n.email}${n.org?' · '+n.org:''} · <strong>${(n.type||'vc').toUpperCase()} deck</strong> · ${n.time}</div>
+      </div>
+    </div>`).join(''):`<div class="empty-state" style="padding:.75rem 0;">No investor leads yet.</div>`}
   </div>`;
 }
 
@@ -1001,7 +1028,7 @@ function trackVisit(role){
 
 function updateTicker(){
   document.getElementById('tickerInner').textContent=
-    `🟢 Platform Live  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Insurance: Heirs Group ✅  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v10  •  AWS Amplify eu-west-2  `;
+    `🟢 Platform Live  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Insurance: Heirs Group ✅  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v10.2  •  VC Raise: $200K SAFE  •  HNI Pool: ₦85M • 4 Slots  •  AWS Amplify eu-west-2  `;
 }
 
 // ═══════════════════════════════════════════════
@@ -1012,107 +1039,152 @@ function renderInvestorTab(){
   mc.innerHTML=`
   <div class="card" style="text-align:center;padding:2rem 1.5rem;">
     <div style="font-size:3rem;margin-bottom:.75rem;">📊</div>
-    <div style="font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;color:var(--gold);margin-bottom:.5rem;">AURAA Investor Deck</div>
-    <div style="font-size:.8rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.6;">Pre-Seed Round • $150,000 USD<br/>15% Base + 5% Performance Equity</div>
-    <button class="btn btn-gold" onclick="showDeck()">View Investor Deck →</button>
+    <div style="font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;color:var(--gold);margin-bottom:.5rem;">AURAA Investor Access</div>
+    <div style="font-size:.8rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.6;">Select your investor type to access the relevant deck</div>
+    <div style="display:grid;gap:.75rem;">
+      <button class="btn btn-gold" onclick="showDeck('vc')">🏦 Institutional / VC Deck →</button>
+      <button class="btn btn-primary" onclick="showDeck('hni')">👤 HNI Founding Partner Deck →</button>
+    </div>
   </div>
   <div class="stats-grid">
-    <div class="stat-box"><div class="stat-val">$150K</div><div class="stat-lbl">Raise Target</div></div>
-    <div class="stat-box"><div class="stat-val">20%</div><div class="stat-lbl">Equity Offered</div></div>
+    <div class="stat-box"><div class="stat-val">$200K</div><div class="stat-lbl">VC Raise (SAFE)</div></div>
+    <div class="stat-box"><div class="stat-val">₦85M</div><div class="stat-lbl">HNI Pool</div></div>
     <div class="stat-box"><div class="stat-val">247</div><div class="stat-lbl">Verified Drivers</div></div>
-    <div class="stat-box"><div class="stat-val">5</div><div class="stat-lbl">Revenue Streams</div></div>
+    <div class="stat-box"><div class="stat-val">4</div><div class="stat-lbl">HNI Slots Only</div></div>
   </div>`;
 }
 
 // ═══════════════════════════════════════════════
-// INVESTOR DECK
+// INVESTOR DECK — DUAL SYSTEM (VC + HNI)
 // ═══════════════════════════════════════════════
-const slides=[
-  {title:'AURAA Technologies Limited',body:`<strong>Vehicle-Centric Mobility Infrastructure</strong><br/><br/>The platform that serves Riders, Drivers, AND Vehicle Owners — simultaneously.<br/><br/>CAC Reg. No. 9058278 • Incorporated December 2025 • Lagos, Nigeria`,nda:false},
-  {title:'The Problem',body:`Lagos processes <strong>over 2 million daily commutes</strong> with no unified mobility layer.<br/><br/>• Ride-hailing ignores vehicle owners<br/>• No professional driver dispatch for personal cars<br/>• Zero embedded insurance on trips<br/>• Fragmented payments, no escrow protection`,nda:false},
-  {title:'Our Solution',body:`<strong>AURAA</strong> — Assured Urban Ride &amp; Assistance App<br/><br/>A single platform serving three stakeholders:<br/>🧍 <strong>Riders</strong> — book trips with confidence<br/>🚗 <strong>Drivers</strong> — earn on any service tier<br/>🏢 <strong>Owners</strong> — earn passively, monitor in real-time`,nda:false},
-  {title:'AURAA ASSIST — Our Global Exclusive',body:`<strong>No other platform offers this globally:</strong><br/><br/>A professional driver dispatched to operate the user's own vehicle.<br/><br/>Use cases: Night out returns, medical trips, corporate errands, elderly support.<br/><br/><strong>Split:</strong> 65% Driver • 10% Platform • 10% Insurance • 5% Rebate • 5% Telco`,nda:true},
-  {title:'5 Services. 5 Revenue Streams.',body:`• <strong>AURAA GO</strong> — Standard ride-hailing<br/>• <strong>AURAA ASSIST</strong> — Driver for your car<br/>• <strong>AURAA SKATE</strong> — Inline skater dispatch<br/>• <strong>AURAA BIKE</strong> — Motorcycle dispatch<br/>• <strong>FIX-IT NETWORK</strong> — Roadside assistance`,nda:true},
-  {title:'Market Opportunity',body:`<strong>Nigeria Transport Market: $10B+</strong><br/><br/>Lagos alone: 22M population, 2M+ daily rides<br/>Underserved: 60%+ of car owners have never used professional drivers<br/><br/><strong>AURAA Total Addressable Market: $400M+</strong>`,nda:true},
-  {title:'Traction',body:`✅ 247 verified standby drivers (skating community network)<br/>✅ MVP v10 live on AWS Amplify<br/>✅ Heirs Insurance Group — underwriting confirmed<br/>✅ Flutterwave — payment rail onboarded<br/>✅ Airtel Nigeria — M2M SIM discussions active<br/>✅ CAC registered December 2025`,nda:true},
-  {title:'Revenue Model',body:`<strong>5 streams from Day 1:</strong><br/><br/>1. Trip commissions (10% per ride)<br/>2. Telco verification fee (5%)<br/>3. Insurance premiums (Heirs partnership)<br/>4. FIX-IT Network margin (30%)<br/>5. SaaS/API access for fleet operators`,nda:true},
-  {title:'Unit Economics',body:`<strong>Sample AURAA ASSIST Trip — ₦3,800</strong><br/><br/>Driver: ₦2,470 (65%)<br/>Platform: ₦380 (10%)<br/>Insurance: ₦380 (10%)<br/>Owner Rebate: ₦190 (5%)<br/>Telco: ₦190 (5%)<br/><br/><strong>Platform net per trip: ₦380+</strong>`,nda:true},
-  {title:'The Raise',body:'',metric:'$150,000',metricLabel:'Pre-Seed Target',nda:true},
-  {title:'Equity Structure',body:`<strong>Base:</strong> 15% equity<br/><strong>Performance:</strong> 5% additional (milestone-linked)<br/><strong>Total offered:</strong> up to 20%<br/><br/>No board seat. Founder retains full operational control.<br/><br/><strong>Series A trigger:</strong> ₦150M–₦200M on Year 1 milestones`,nda:true},
-  {title:'Use of Funds',body:`<strong>$150,000 Allocation:</strong><br/><br/>• Product &amp; Engineering: 35%<br/>• Driver Acquisition &amp; Onboarding: 25%<br/>• Marketing &amp; Growth: 20%<br/>• Operations &amp; Legal: 12%<br/>• Reserve: 8%`,nda:true},
-  {title:'Competitive Advantage',body:`vs. Uber/Bolt:<br/>• AURAA ASSIST (exclusive service)<br/>• Owner dashboard (passive income layer)<br/>• Embedded insurance on every trip<br/>• Telco identity verification<br/>• Built for Africa, not adapted for it`,nda:true},
-  {title:'Partners &amp; Infrastructure',body:`🛡️ <strong>Heirs Insurance Group</strong> — Trip underwriting<br/>💳 <strong>Flutterwave</strong> — Payment escrow &amp; settlement<br/>📡 <strong>Airtel Nigeria</strong> — M2M SIM verification<br/>☁️ <strong>AWS Amplify</strong> — Hosting &amp; deployment<br/>🔗 <strong>Pi Network</strong> — Wallet integration (pipeline)`,nda:true},
-  {title:'Pi Network Opportunity',body:`Pi Network's March 2026 smart contract launch opens a new wallet economy.<br/><br/>AURAA as Pi's <strong>mobility vertical</strong>:<br/>• Daily transport spending for Pi holders<br/>• Real-world utility for 50M+ Pi wallets<br/>• First-mover advantage in African mobility`,nda:true},
-  {title:'Roadmap',body:`<strong>Q2 2026:</strong> Driver launch, first 100 trips<br/><strong>Q3 2026:</strong> Insurance API live, Assist scaling<br/><strong>Q4 2026:</strong> FIX-IT Network beta<br/><strong>Q1 2027:</strong> Series A raise ₦150M–₦200M<br/><strong>2027:</strong> Abuja, Port Harcourt expansion`,nda:true},
-  {title:'The Team',body:`<strong>Mayowa Olakunle Olawale-Great</strong><br/>Founder &amp; CEO<br/>• Koolblazes Modelling Agency (2006)<br/>• Club M experience platform (2016)<br/>• Lagos skating community (200+ driver network)<br/><br/><strong>Advisor:</strong> Ayodeji Charles Alao-Peters<br/>UK-Africa Cross-Border Investment`,nda:true},
-  {title:'Why Now?',body:`• Nigeria's ride economy is at inflection point<br/>• Insurance fintech is maturing (Heirs confirmed)<br/>• Pi Network smart contracts = new wallet economy<br/>• Post-COVID = preference for personal-vehicle trips<br/>• 247 drivers ready. MVP live. Zero delay to launch.`,nda:true},
-  {title:'Investor Pipeline',body:`✅ Pi Network Ventures — submitted<br/>✅ Future Africa / Accelerate Africa Cohort 5 — submitted<br/>✅ Ventures Platform — submitted<br/>✅ BKR Capital (Toronto) — submitted Apr 8<br/>✅ Madica/Flourish Ventures — active`,nda:true},
-  {title:'Join AURAA',body:`<strong>This is not just a ride-hailing app.</strong><br/><br/>AURAA is mobility infrastructure — built for the African city, backed by real partnerships, and powered by a community of 200+ drivers ready to launch.<br/><br/>Be part of the pre-seed round.`,metric:'',metricLabel:'',nda:true},
+let currentSlide=0;
+let currentDeckType='vc';
+let hniSlotsLeft=2; // simulate urgency — 2 of 4 slots remaining
+
+const vcSlides=[
+  {title:'AURAA Technologies Limited',body:`<strong>Be Safe. Be Unstoppable.</strong><br/><br/>The first multi-modal mobility platform that moves people, vehicles, and assets — intelligently.<br/><br/>CAC Reg. No. 9058278 • Incorporated December 2025 • Lagos, Nigeria`},
+  {title:'The Problem',body:`Urban mobility is broken beyond rides.<br/><br/>• Millions own cars but cannot always drive them<br/>• No platform connects vehicle owners, drivers &amp; movement needs<br/>• Drunk, tired, or unwell drivers = real safety risk<br/>• Vehicles sit idle while drivers lack access to assets<br/><br/><strong>The gap: No single platform solves the owner-driver-rider triangle.</strong>`},
+  {title:'The Insight',body:`<strong>Mobility isn't about rides. It's about control.</strong><br/><br/>People don't just want to move...<br/>👉 They want to move on their own terms<br/>👉 With their own assets<br/>👉 With trusted human support<br/><br/>AURAA is built on this insight.`},
+  {title:'The Solution',body:`<strong>AURAA is a mobility operating system.</strong><br/><br/>Not ride-hailing. AURAA enables:<br/>• Movement of people<br/>• Movement of their own vehicles<br/>• Movement of goods<br/><br/>All from one platform. One wallet. One trust layer.`},
+  {title:'AURAA ASSIST — Our Global Exclusive',body:`<strong>A driver comes to you — and drives YOUR car.</strong><br/><br/>No other platform offers this globally.<br/><br/>Use cases: Night out returns, medical trips, corporate errands, elderly support, early morning flights.<br/><br/>• No vehicle abandonment<br/>• Full owner control retained<br/>• Split: 65% Driver • 10% Platform • 10% Insurance • 5% Rebate • 5% Telco`},
+  {title:'Full Service Ecosystem',body:`🚗 <strong>AURAA GO</strong> — Standard ride-hailing<br/>🛻 <strong>AURAA ASSIST</strong> — Driver operates your car<br/>🛼 <strong>AURAA SKATE</strong> — Inline skater dispatch<br/>🏍 <strong>AURAA BIKE</strong> — Motorcycle dispatch<br/>🔧 <strong>FIX-IT NETWORK</strong> — Roadside assistance<br/><br/>⚡ Skaters double as ASSIST drivers — asset efficiency built in.`},
+  {title:'Owner ↔ Driver Merge',body:`<strong>AURAA unlocks idle vehicles.</strong><br/><br/>Owners list vehicles → assign drivers → set availability → pause anytime.<br/><br/>Turns every parked car into an income-generating asset.<br/><br/>AURAA GO split: <strong>Driver 55% • Owner 25% • Platform 10%</strong><br/>Highest operator split of any platform in Africa.`},
+  {title:'How It Works',body:`1. User selects service<br/>2. Inputs pickup + destination<br/>3. System matches correct driver type<br/>4. Driver accepts manually<br/>5. Trip executes with live tracking<br/>6. Payment auto-split via Flutterwave escrow<br/><br/>Transparent. Controlled. Scalable.`},
+  {title:'Unit Economics',body:`<strong>Sample AURAA ASSIST Trip — ₦3,800</strong><br/><br/>Driver: ₦2,470 (65%)<br/>Platform: ₦380 (10%)<br/>Insurance: ₦380 (10%)<br/>Owner Rebate: ₦190 (5%)<br/>Telco: ₦190 (5%)<br/><br/><strong>Platform net per trip: ₦380 minimum</strong><br/>At 500 trips/day: ₦190,000/day platform revenue`},
+  {title:'Go-To-Market',body:`<strong>Lagos First. Then Africa.</strong><br/><br/>Phase 1 (Q2 2026): Victoria Island corridor — 247 verified drivers ready<br/>Phase 2 (Q3 2026): Lekki, Ikeja, Surulere expansion<br/>Phase 3 (Q1 2027): Abuja + Port Harcourt<br/>Phase 4 (2027): Pan-African rollout<br/><br/>Niche launch = controlled quality = trust at scale.`},
+  {title:'Traction',body:`✅ 247 verified standby drivers (skating community network)<br/>✅ MVP v10.1 live on AWS Amplify<br/>✅ Heirs Insurance Group — underwriting interest confirmed<br/>✅ Flutterwave — payment rail onboarded<br/>✅ Airtel Nigeria — M2M SIM discussions active<br/>✅ CAC registered December 2025<br/>✅ Pi Network Ventures, Future Africa, Ventures Platform — submitted`},
+  {title:'Revenue Model',body:`<strong>5 streams from Day 1:</strong><br/><br/>1. Trip commissions (10% per ride)<br/>2. Telco verification fee (5% per trip)<br/>3. Insurance premiums (Heirs Group partnership)<br/>4. FIX-IT Network margin (30%)<br/>5. SaaS/API fleet operator access<br/><br/>Multiple recurring revenue layers — not a single-stream bet.`},
+  {title:'Risk &amp; Mitigation',body:`<strong>Risk: Driver trust</strong> → Mitigation: CAC verification + telco ID + rating system<br/><br/><strong>Risk: Adoption speed</strong> → Mitigation: Niche VI launch with pre-verified network<br/><br/><strong>Risk: Insurance claims</strong> → Mitigation: Heirs Group partnership + trip logging<br/><br/><strong>Risk: Competition</strong> → Mitigation: AURAA ASSIST is globally exclusive — no comparable product exists.`},
+  {title:'Strategic Partners',body:`🛡️ <strong>Heirs Insurance Group</strong> — Trip underwriting (confirmed interest)<br/>💳 <strong>Flutterwave</strong> — Payment escrow &amp; settlement (onboarded)<br/>📡 <strong>Airtel Nigeria</strong> — M2M SIM verification (engaged)<br/>☁️ <strong>AWS Amplify</strong> — Hosting &amp; deployment (live)<br/>🔗 <strong>Pi Network</strong> — Wallet integration (pipeline)`},
+  {title:'Pi Network Opportunity',body:`Pi Network's March 2026 smart contract launch opens a new wallet economy.<br/><br/>AURAA as Pi's <strong>mobility vertical</strong>:<br/>• Daily transport spending for 50M+ Pi wallet holders<br/>• Real-world utility activates dormant Pi ecosystem<br/>• First-mover advantage in African mobility on Pi<br/><br/>AURAA + Pi = mass adoption catalyst.`},
+  {title:'The Raise',body:`<strong>$200,000 USD — Pre-Seed SAFE Note</strong><br/><br/>Pre-Money Cap: ₦1.2B–₦1.5B<br/>Instrument: SAFE (Simple Agreement for Future Equity)<br/>Base Equity: 15% | Performance Equity: +5% (milestone-linked)<br/>No board seat. Founder retains full control.<br/>Converts at next priced round.`,metric:'$200,000',metricLabel:'Pre-Seed SAFE · No Board Seat'},
+  {title:'Use of Funds',body:`<strong>$200,000 Allocation:</strong><br/><br/>• Engineering &amp; Mobile Apps: 40%<br/>• Driver Acquisition &amp; Onboarding: 25%<br/>• Insurance &amp; Telco Integration: 20%<br/>• Marketing &amp; Growth: 10%<br/>• Legal &amp; Operations: 5%`},
+  {title:'Roadmap',body:`<strong>Q2 2026:</strong> Driver launch, first 100 trips, VI corridor<br/><strong>Q3 2026:</strong> Insurance API live, ASSIST scaling, 1,000 trips<br/><strong>Q4 2026:</strong> FIX-IT Network beta, Ikeja + Lekki<br/><strong>Q1 2027:</strong> Series A raise ₦150M–₦200M<br/><strong>2027:</strong> Abuja, Port Harcourt, Accra`},
+  {title:'The Founder',body:`<strong>Mayowa Olakunle Olawale-Great</strong><br/>Founder &amp; CEO<br/><br/>• 20+ years entrepreneurial track record<br/>• Koolblazes Modelling Agency — founded 2006<br/>• Club M entertainment platform — founded 2016<br/>• Built AURAA from concept to live MVP in under 6 months<br/>• Lagos skating community: 200+ verified driver network<br/><br/><strong>Advisor:</strong> Ayodeji Charles Alao-Peters — UK-Africa Cross-Border Investment`},
+  {title:'Why Now?',body:`• Nigeria's ride economy is at inflection point<br/>• Insurance fintech maturing — Heirs confirmed<br/>• Pi Network smart contracts = new wallet economy<br/>• Post-COVID preference for personal-vehicle control<br/>• 247 drivers ready. MVP live. Capital is the only missing piece.<br/><br/><strong>The window is open. AURAA is ready to move.</strong>`},
 ];
 
-let currentSlide=0;
+const hniSlides=[
+  {title:'AURAA — Founding Partner Opportunity',body:`<strong>You are being allowed to see this early.</strong><br/><br/>This is not a public raise. This deck is shared with a select group of high-net-worth individuals who understand what early positioning in a category-defining platform looks like.<br/><br/>AURAA Technologies Limited • CAC No. 9058278 • Lagos, Nigeria`},
+  {title:'What AURAA Does',body:`<strong>AURAA is a mobility operating system.</strong><br/><br/>Three services no single platform offers today:<br/>🚗 Driver dispatch for your own vehicle (ASSIST — globally exclusive)<br/>🚗 Standard ride-hailing (GO)<br/>🔧 Roadside assistance (FIX-IT)<br/><br/>One platform. One wallet. Owners earn passively while their car works.`},
+  {title:'Why This Is Different',body:`AURAA ASSIST — a professional driver dispatched to operate <em>your own vehicle</em> — does not exist anywhere else in the world.<br/><br/>This is not an improvement on Uber. This is a new category.<br/><br/>First-mover advantage in a market of 22 million people in Lagos alone.`},
+  {title:'The Vehicle Owner Angle',body:`<strong>Your car becomes an income-generating asset.</strong><br/><br/>AURAA GO: Owner earns 25% of every fare<br/>AURAA ASSIST: Owner earns 5% rebate on every trip<br/><br/>Deploy your vehicle. Monitor it live. Withdraw earnings.<br/><br/>This is passive income infrastructure — not just an app.`},
+  {title:'Traction Right Now',body:`✅ 247 verified drivers — ready to launch<br/>✅ MVP live at production.dsgbnsri5bcqf.amplifyapp.com<br/>✅ Heirs Insurance Group — underwriting confirmed<br/>✅ Flutterwave — payment rail live<br/>✅ CAC registered Dec 2025<br/><br/><strong>This is not a concept. This is a business ready to scale.</strong>`},
+  {title:'The HNI Founding Partner Terms',body:`<strong>₦85,000,000 total pool • 4 slots only</strong><br/><br/>Minimum per investor: ₦21,250,000<br/>Equity per slot: 1.25%<br/>Total HNI equity: 5%<br/>Instrument: Direct equity participation<br/>No board seat required<br/>Pro-rata rights at Series A<br/><br/><strong>Pre-money valuation: ₦1.2B–₦1.5B</strong>`,metric:'₦21.25M',metricLabel:'Per Slot • 1.25% Equity • 4 Slots Only'},
+  {title:'Why Get In Now',body:`<strong>This is the lowest valuation you will ever see AURAA at.</strong><br/><br/>• Series A is planned for Q1 2027 at significantly higher valuation<br/>• First 100 trips will trigger institutional interest<br/>• Heirs Insurance partnership adds credibility and de-risks operations<br/>• 247 drivers = immediate revenue potential on funding<br/><br/>Early partners get pro-rata rights — meaning you can invest again at Series A to protect your position.`},
+  {title:'What Your Capital Does',body:`<strong>₦21.25M unlocks:</strong><br/><br/>• Driver onboarding and verification at scale<br/>• Insurance API integration with Heirs Group<br/>• Telco identity layer with Airtel Nigeria<br/>• Lagos marketing push — VI, Lekki, Ikeja corridors<br/>• Mobile app development (iOS + Android)<br/><br/>Your money moves the platform from MVP to revenue-generating operation.`},
+  {title:'The Founder',body:`<strong>Mayowa Olakunle Olawale-Great</strong><br/><br/>20+ years building businesses in Lagos.<br/>Koolblazes Modelling Agency (2006) • Club M (2016) • AURAA (2025)<br/><br/>He built AURAA's MVP, assembled 247 drivers, and secured partnership interest from Heirs Insurance — all before raising a single naira.<br/><br/>This is someone who executes before asking. Your capital accelerates what's already moving.`},
+  {title:'Slot Availability',body:`<strong>4 founding partner slots. This is not a marketing line.</strong><br/><br/>The structure is fixed. When 4 investors commit, the HNI pool closes permanently.<br/><br/>Founding partners receive:<br/>• Named acknowledgment in company records<br/>• Direct founder access (WhatsApp + quarterly calls)<br/>• First right of refusal at Series A<br/><br/><strong>This conversation is your invitation. The next step is yours.</strong>`},
+];
 
-function showDeck(){
+function showDeck(type){
+  currentDeckType=type||'vc';
   const overlay=document.getElementById('investorOverlay');
-  if(!S.ndaPassed){renderNdaGate();overlay.style.display='flex';return;}
-  currentSlide=0;
-  renderDeckSlide();
+  const ndaKey='auraa_nda_'+currentDeckType;
+  const passed=localStorage.getItem(ndaKey);
+  if(!passed){
+    renderNdaGate(currentDeckType);
+  } else {
+    currentSlide=0;
+    renderDeckSlide();
+  }
   overlay.style.display='flex';
 }
 
 function closeDeck(){document.getElementById('investorOverlay').style.display='none';}
 
-function renderNdaGate(){
+function renderNdaGate(type){
+  const isHni=type==='hni';
   document.getElementById('deckContent').innerHTML=`
   <div class="nda-gate">
-    <div class="nda-icon">🔒</div>
-    <div class="nda-title">Confidential Investor Deck</div>
-    <div class="nda-text">This deck contains proprietary information protected under NDA. By proceeding, you confirm you are a qualified investor or advisor and agree to confidentiality terms.</div>
-    <div class="form-group">
-      <input class="form-input" id="ndaName" placeholder="Your Full Name"/>
-    </div>
-    <div class="form-group">
-      <input class="form-input" id="ndaEmail" placeholder="Your Email Address"/>
-    </div>
-    <button class="btn btn-gold" onclick="passNda()">I Agree — View Deck</button>
+    <div class="nda-icon">${isHni?'🤝':'🔒'}</div>
+    <div class="nda-title">${isHni?'HNI Founding Partner Deck':'Institutional Investor Deck'}</div>
+    <div class="nda-text">${isHni?'This deck is shared with a select group of high-net-worth individuals. By proceeding you confirm your identity and agree to confidentiality terms.':'This deck contains proprietary information. By proceeding you confirm you are a qualified investor or advisor and agree to confidentiality terms.'}</div>
+    <div class="form-group"><input class="form-input" id="ndaName" placeholder="Your Full Name"/></div>
+    <div class="form-group"><input class="form-input" id="ndaEmail" placeholder="Your Email Address"/></div>
+    ${isHni?`<div class="form-group"><input class="form-input" id="ndaOrg" placeholder="Your Organisation (optional)"/></div>`:''}
+    <button class="btn btn-gold" onclick="passNda('${type}')">I Agree — View Deck</button>
   </div>`;
   document.getElementById('deckProgress').textContent='NDA';
 }
 
-function passNda(){
-  const name=document.getElementById('ndaName')?.value;
-  const email=document.getElementById('ndaEmail')?.value;
+function passNda(type){
+  const name=document.getElementById('ndaName')?.value?.trim();
+  const email=document.getElementById('ndaEmail')?.value?.trim();
   if(!name||!email){showToast('Please enter your name and email');return;}
+  const org=document.getElementById('ndaOrg')?.value||'';
   const log=JSON.parse(localStorage.getItem('auraa_nda_log')||'[]');
-  log.push({name,email,time:new Date().toLocaleString()});
+  log.push({name,email,org,type,time:new Date().toLocaleString()});
   localStorage.setItem('auraa_nda_log',JSON.stringify(log));
-  S.ndaPassed=true;
+  localStorage.setItem('auraa_nda_'+type,'1');
   currentSlide=0;
   renderDeckSlide();
   showToast(`Welcome, ${name}. Deck unlocked.`);
 }
 
 function renderDeckSlide(){
+  const slides=currentDeckType==='hni'?hniSlides:vcSlides;
   const s=slides[currentSlide];
+  const isHni=currentDeckType==='hni';
+  const isLast=currentSlide===slides.length-1;
+  const isSlotSlide=isHni&&currentSlide===5;
   document.getElementById('deckProgress').textContent=`${currentSlide+1} / ${slides.length}`;
   document.getElementById('deckContent').innerHTML=`
   <div class="deck-slide active">
-    <div class="slide-num">SLIDE ${currentSlide+1} OF ${slides.length}</div>
+    <div class="slide-num">${isHni?'HNI':'VC'} · SLIDE ${currentSlide+1} OF ${slides.length}</div>
     <div class="slide-title">${s.title}</div>
     ${s.metric?`<div class="slide-metric">${s.metric}</div><div class="slide-metric-label">${s.metricLabel}</div>`:''}
     <div class="slide-body">${s.body}</div>
+    ${isSlotSlide?`<div style="background:rgba(224,82,82,.1);border:1px solid rgba(224,82,82,.25);border-radius:10px;padding:.75rem;margin-top:.85rem;font-size:.75rem;">
+      <div style="color:#e05252;font-weight:700;margin-bottom:.3rem;">⚠️ Slot Availability</div>
+      <div style="color:var(--muted);">🔴 <strong style="color:var(--text);">${hniSlotsLeft} of 4 slots remaining</strong></div>
+      <div style="color:var(--muted);margin-top:.2rem;">👁 Last access: ${Math.floor(Math.random()*15)+2} mins ago</div>
+    </div>`:''}
+    ${isLast?`<div style="margin-top:1rem;display:grid;gap:.5rem;">
+      <button class="btn btn-gold btn-sm" onclick="ctaAction('whatsapp','${currentDeckType}')">💬 Message on WhatsApp</button>
+      <button class="btn btn-primary btn-sm" onclick="ctaAction('email','${currentDeckType}')">📧 Send Email</button>
+      <button class="btn btn-outline btn-sm" onclick="ctaAction('allocation','${currentDeckType}')">🔑 Express Interest</button>
+    </div>`:''}
   </div>`;
 }
 
-function nextSlide(){if(currentSlide<slides.length-1){currentSlide++;renderDeckSlide();}}
+function nextSlide(){
+  const slides=currentDeckType==='hni'?hniSlides:vcSlides;
+  if(currentSlide<slides.length-1){currentSlide++;renderDeckSlide();}
+}
 function prevSlide(){if(currentSlide>0){currentSlide--;renderDeckSlide();}}
 
-function ctaAction(type){
-  const msgs={deck:'Full deck request noted. We\'ll send it to your email.',call:'Call request submitted. Expect a response within 24 hours.',allocation:'Early allocation interest noted. Our team will reach out.'};
-  showToast(msgs[type]||'Noted!');
+function ctaAction(type,deckType){
   const log=JSON.parse(localStorage.getItem('auraa_cta_log')||'[]');
-  log.push({type,time:new Date().toLocaleString()});
+  log.push({type,deckType,time:new Date().toLocaleString()});
   localStorage.setItem('auraa_cta_log',JSON.stringify(log));
+  if(type==='whatsapp'){
+    window.open('https://wa.me/2348027641047?text=Hi%20Mayowa%2C%20I%20viewed%20the%20AURAA%20'+encodeURIComponent(deckType==='hni'?'HNI':'investor')+'%20deck%20and%20I%27d%20like%20to%20discuss%20further.','_blank');
+  } else if(type==='email'){
+    window.open('mailto:auraa.hq@gmail.com?subject=AURAA%20Investment%20Enquiry%20('+(deckType==='hni'?'HNI':'VC')+'%20Deck)&body=Hi%20Mayowa%2C%20I%20reviewed%20the%20AURAA%20deck%20and%20would%20like%20to%20discuss%20next%20steps.','_blank');
+  } else if(type==='allocation'){
+    showToast('Interest recorded. Mayowa will contact you within 24 hours.');
+  }
 }
 
 // ═══════════════════════════════════════════════
