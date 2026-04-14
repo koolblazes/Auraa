@@ -519,8 +519,8 @@ function renderTab(i){
 // ═══════════════════════════════════════════════
 function renderBook(){
   if(S.tripState==='active'||S.tripState==='searching'){renderTripActive();return;}
-  // Default to GO if service was previously ASSIST (not available to riders)
-  if(S.service==='assist') S.service='go';
+  // ASSIST and FIX-IT not available to riders — reset to GO if needed
+  if(S.service==='assist'||S.service==='fix') S.service='go';
   const mc=document.getElementById('mainContent');
   mc.innerHTML=`
   <div class="card">
@@ -529,7 +529,7 @@ function renderBook(){
     </div>
     <div class="card-title">Select Service</div>
     <div class="service-pills" id="pills">
-      ${['go','skate','bike','fix'].map(s=>`<div class="pill${S.service===s?' active':''}" onclick="setService('${s}')">${svcLabel(s)}</div>`).join('')}
+      ${['go','skate','bike'].map(s=>`<div class="pill${S.service===s?' active':''}" onclick="setService('${s}')">${svcLabel(s)}</div>`).join('')}
     </div>
     <div id="svcDesc" class="slide-body" style="margin-bottom:1rem;">${svcDesc(S.service)}</div>
     <div class="form-group">
@@ -569,7 +569,7 @@ function setService(s){
 function calcFare(){
   const d=document.getElementById('dropoff').value;
   if(!d){showToast('Enter a drop-off location');return;}
-  const fares={assist:3800,go:2800,skate:1200,bike:900,fix:5000};
+  const fares={go:2800,skate:1200,bike:900};
   const base=fares[S.service]||2500;
   const fare=base+Math.floor(Math.random()*500);
   const splits=getSplits(S.service,fare);
