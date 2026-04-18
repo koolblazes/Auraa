@@ -1568,39 +1568,56 @@ setTimeout(()=>hideSplash(),5000);
 
 // ═══════════════════════════════════════════════
 // FOUNDING USER REVEAL TRIGGER (v10.7)
-// Fires the one-time celebration for any registered user entering a
-// non-investor dashboard if they haven't seen it yet. Covers pre-v10.7
-// users, investor-registered users browsing other dashboards, and
-// anyone whose original registration didn't show the ceremony.
+// Fires the one-time celebration for any user entering a non-investor
+// dashboard. Handles three scenarios:
+//   1. No identity at all → fire registration gate (which ends in its own ceremony + journey)
+//   2. Has identity, hasn't seen reveal → fire the ceremony + auto-launch journey
+//   3. Has identity, has seen reveal → silent, let them explore
 // ═══════════════════════════════════════════════
 function maybeTriggerFoundingReveal(role){
   // Never fire on the investor dashboard itself — that context is about
   // evaluating the business, not experiencing the product.
   if(role === 'investor') return;
 
-  // Admin gets a manual replay button, doesn't auto-fire on entry.
-  // (Except first time ever, so Mayowa sees it at least once without hunting.)
-  const me = IdentityStore.current();
-  if(!me || !me.email) return;
-
-  // Reveal flag already set? Don't fire.
-  if(FU.hasSeenReveal(me.email)) return;
-
   // Admin role: skip the auto-fire — you have the "Replay" button in admin dash.
-  // This avoids popping the ceremony over your admin workflow.
   if(role === 'admin') return;
 
-  // For all other dashboards (rider, driver, owner, biker, bicycler, skater):
-  // backfill the FU role for the current dashboard, assign FU#, fire reveal.
+  const me = IdentityStore.current();
+
+  // Scenario 1: Brand new visitor — no identity at all.
+  // Fire the registration gate. Its own post-save flow triggers showAccessCode
+  // (the confetti ceremony) and, if the registered role matches S.role,
+  // auto-launches the journey.
+  if(!me || !me.email){
+    // Small delay so the dashboard tab renders underneath first — prevents
+    // the "flash of Book Trip form" feeling before the modal drops in.
+    setTimeout(()=>{
+      requireIdentity(
+        `Welcome to AURAA. Claim your Founding ${ROLES[role]?.label||'User'} seat to begin.`,
+        { role }
+      ).then(identity=>{
+        // If they cancelled, we leave them on the dashboard — they can still
+        // browse and the booking flow will re-prompt when they try to act.
+        if(!identity) {
+          showToast('You can explore first — we\'ll ask again when you book.');
+        }
+        // If they registered, requireIdentity's own flow handles the ceremony + journey.
+      });
+    }, 400);
+    return;
+  }
+
+  // Scenario 2: Has identity, hasn't seen reveal yet.
+  if(FU.hasSeenReveal(me.email)) return;
+
+  // Backfill the FU role for this dashboard, assign FU#, fire reveal.
   const backfilled = FU.backfillLegacyRole(me.email, role);
   const seq = FU.getOrAssignSeq(me.email);
 
   // Refresh identity with fuSeq so reveal shows the right number
   const refreshed = IdentityStore.current() || me;
   refreshed.fuSeq = seq;
-  // Ensure the refreshed identity knows the role context
   if(!refreshed.role) refreshed.role = role;
-  // Ensure a code exists (legacy users might not have one)
   if(!refreshed.code) refreshed.code = IdentityStore.generateCode(refreshed);
   IdentityStore.save(refreshed);
 
@@ -1613,13 +1630,9 @@ function maybeTriggerFoundingReveal(role){
 
   // Fire the ceremony. Delay slightly so tab content renders first underneath.
   setTimeout(()=>{
-    // The reveal overlay: re-uses showAccessCode which we already souped up
-    // with confetti, FU# count-up, slot claim card, and tier announcement.
     const revealIdentity = { ...refreshed, role };
     showAccessCode(revealIdentity, ()=>{
       FU.markRevealSeen(me.email);
-      // v10.7 — Auto-launch the role journey after reveal closes,
-      // IF the user hasn't already completed this role's journey.
       autoLaunchJourneyIfNeeded(role);
     });
   }, 600);
