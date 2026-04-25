@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v11 Complete</title>
+<title>AURAA Technologies — MVP v11.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root {
@@ -580,76 +580,393 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
 .fu-cross-v2-skip{font-size:.7rem;color:var(--muted);text-align:center;font-style:italic;}
 .fu-cross-v2-skip a{color:var(--muted);text-decoration:underline;cursor:pointer;}
 .fu-cross-v2-skip a:hover{color:var(--gold);}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v11.1 VISUAL OVERHAUL — splash v2, role select v2, rider hero, wallet hero,
+   service grid, transition overlay. All scoped under explicit class/id names
+   so no v11 styles regress.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Splash v2 ──────────────────────────────────────────────────────────── */
+#splash.s2{
+  background:radial-gradient(ellipse at 50% 38%, #0e6b3f 0%, #0a5c36 38%, #06381f 100%);
+  padding:2rem 1.5rem;
+}
+#splash.s2 .s2-stack{display:flex;flex-direction:column;align-items:center;text-align:center;max-width:440px;width:100%;}
+#splash.s2 .s2-mark{
+  width:140px;height:140px;border-radius:50%;
+  background:#0a5c36; /* matches the cropped tile so the leaf-circle reads as the mark */
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 18px 60px rgba(0,0,0,.45), 0 0 0 1px rgba(201,168,76,.15) inset;
+  opacity:0;transform:scale(.78);
+  animation:s2MarkIn 1.2s cubic-bezier(.2,.8,.2,1) .15s forwards;
+}
+#splash.s2 .s2-mark img{width:140px;height:140px;border-radius:50%;display:block;}
+#splash.s2 .s2-word{
+  font-family:'Syne',sans-serif;font-weight:800;
+  font-size:4.5rem;letter-spacing:.14em;line-height:1;
+  color:var(--gold);
+  margin-top:1.6rem;
+  text-shadow:0 2px 30px rgba(201,168,76,.25);
+  opacity:0;transform:translateY(14px);
+  animation:s2WordIn 1.0s cubic-bezier(.2,.8,.2,1) .65s forwards;
+}
+#splash.s2 .s2-divider{
+  width:0;height:1px;margin:1.2rem auto 0;
+  background:linear-gradient(90deg, transparent, rgba(201,168,76,.55), transparent);
+  animation:s2DividerIn 1.0s cubic-bezier(.2,.8,.2,1) 1.0s forwards;
+}
+#splash.s2 .s2-tag{
+  font-family:'DM Sans',sans-serif;font-style:italic;
+  color:var(--gold);font-size:1.05rem;letter-spacing:.02em;
+  margin-top:1.1rem;opacity:0;
+  animation:s2FadeIn .8s ease 1.4s forwards;
+}
+#splash.s2 .s2-position{
+  font-family:'DM Sans',sans-serif;
+  color:rgba(255,255,255,.62);font-size:.78rem;line-height:1.7;letter-spacing:.04em;
+  margin-top:1.6rem;max-width:320px;
+  opacity:0;animation:s2FadeIn .8s ease 1.7s forwards;
+}
+#splash.s2 .s2-reg{
+  font-family:'DM Sans',sans-serif;
+  color:rgba(255,255,255,.32);font-size:.62rem;letter-spacing:.32em;text-transform:uppercase;
+  margin-top:1.2rem;
+  opacity:0;animation:s2FadeIn .8s ease 1.9s forwards;
+}
+#splash.s2 .s2-tap{
+  font-family:'Syne',sans-serif;
+  color:var(--gold);font-size:.72rem;letter-spacing:.32em;text-transform:uppercase;
+  margin-top:2.4rem;padding:.55rem 1.4rem;border:1px solid rgba(201,168,76,.4);border-radius:999px;
+  opacity:0;animation:s2FadeIn .6s ease 2.2s forwards, s2TapPulse 2.4s ease-in-out 2.8s infinite;
+}
+@keyframes s2MarkIn{
+  0%{opacity:0;transform:scale(.78);}
+  60%{opacity:1;}
+  100%{opacity:1;transform:scale(1);}
+}
+@keyframes s2WordIn{
+  from{opacity:0;transform:translateY(14px);}
+  to{opacity:1;transform:translateY(0);}
+}
+@keyframes s2DividerIn{
+  from{width:0;opacity:0;}
+  to{width:180px;opacity:1;}
+}
+@keyframes s2FadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes s2TapPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(201,168,76,.25);}
+  50%{box-shadow:0 0 0 10px rgba(201,168,76,0);}
+}
+
+/* ── Role Select v2 ─────────────────────────────────────────────────────── */
+#roleSelect.r2{background:linear-gradient(180deg,#0a0a0a 0%, #050505 100%);}
+.r2-stack{display:flex;flex-direction:column;align-items:center;width:100%;max-width:420px;margin:0 auto;}
+.r2-mark{width:64px;height:64px;border-radius:50%;background:#0a5c36;display:flex;align-items:center;justify-content:center;margin-bottom:.85rem;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.r2-mark img{width:64px;height:64px;border-radius:50%;display:block;}
+.r2-title{font-family:'Syne',sans-serif;font-weight:800;font-size:1.55rem;color:var(--gold);letter-spacing:.04em;text-align:center;}
+.r2-sub{font-family:'DM Sans',sans-serif;color:rgba(255,255,255,.55);font-size:.78rem;letter-spacing:.05em;margin-top:.2rem;margin-bottom:1.6rem;text-align:center;}
+.r2-section{font-family:'Syne',sans-serif;font-size:.62rem;font-weight:700;color:var(--muted);letter-spacing:.28em;text-transform:uppercase;align-self:flex-start;margin:.6rem 0 .6rem 2px;}
+
+/* Primary Rider tile — the "obvious path" */
+.r2-rider{
+  width:100%;display:flex;align-items:center;gap:1rem;
+  background:linear-gradient(135deg, rgba(201,168,76,.95) 0%, rgba(232,201,106,.85) 50%, rgba(201,168,76,.95) 100%);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:18px;padding:1.15rem 1.1rem;cursor:pointer;
+  box-shadow:0 14px 40px rgba(201,168,76,.22), 0 1px 0 rgba(255,255,255,.25) inset;
+  transition:transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s;
+  position:relative;overflow:hidden;
+}
+.r2-rider::after{
+  content:'';position:absolute;inset:0;border-radius:18px;
+  background:radial-gradient(ellipse at 110% -20%, rgba(255,255,255,.35), transparent 50%);
+  pointer-events:none;
+}
+.r2-rider:hover,.r2-rider:active{transform:translateY(-2px);box-shadow:0 18px 50px rgba(201,168,76,.32), 0 1px 0 rgba(255,255,255,.3) inset;}
+.r2-rider-icon{
+  width:48px;height:48px;flex-shrink:0;border-radius:14px;
+  background:rgba(10,46,28,.92);display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 12px rgba(0,0,0,.25);
+}
+.r2-rider-icon svg{width:26px;height:26px;}
+.r2-rider-text{display:flex;flex-direction:column;gap:.15rem;text-align:left;flex:1;}
+.r2-rider-name{font-family:'Syne',sans-serif;font-weight:800;font-size:1.05rem;color:#0a2e1c;letter-spacing:.02em;}
+.r2-rider-desc{font-family:'DM Sans',sans-serif;font-size:.74rem;color:rgba(10,46,28,.78);font-weight:500;}
+.r2-rider-arrow{color:#0a2e1c;font-size:1.1rem;font-weight:700;flex-shrink:0;}
+
+/* 6-up dark glass tile grid */
+.r2-grid{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;width:100%;margin-top:.5rem;}
+.r2-tile{
+  background:linear-gradient(180deg, rgba(255,255,255,.025) 0%, rgba(255,255,255,.012) 100%);
+  border:1px solid rgba(201,168,76,.16);
+  border-radius:14px;padding:1rem .8rem;cursor:pointer;text-align:center;
+  transition:all .22s cubic-bezier(.2,.8,.2,1);
+  position:relative;
+  backdrop-filter:blur(8px);
+}
+.r2-tile:hover,.r2-tile:active{border-color:rgba(201,168,76,.55);transform:translateY(-2px);background:linear-gradient(180deg, rgba(201,168,76,.06) 0%, rgba(201,168,76,.02) 100%);box-shadow:0 8px 24px rgba(201,168,76,.12);}
+.r2-tile-icon{display:flex;align-items:center;justify-content:center;height:34px;margin-bottom:.55rem;}
+.r2-tile-icon svg{width:28px;height:28px;}
+.r2-tile-name{font-family:'Syne',sans-serif;font-weight:700;font-size:.86rem;color:var(--text);letter-spacing:.02em;}
+.r2-tile-desc{font-family:'DM Sans',sans-serif;font-size:.66rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+.r2-tile.locked{opacity:.55;}
+.r2-tile.locked::before{
+  content:'🔒';position:absolute;top:.5rem;right:.55rem;font-size:.65rem;opacity:.7;
+}
+
+/* Investor card — distinct visual lane */
+.r2-investor{
+  width:100%;margin-top:1rem;
+  background:linear-gradient(135deg, rgba(201,168,76,.10) 0%, rgba(201,168,76,.03) 100%);
+  border:1px solid rgba(201,168,76,.4);border-radius:16px;padding:1rem .9rem;
+  display:grid;gap:.5rem;
+}
+.r2-investor-head{display:flex;align-items:center;gap:.65rem;}
+.r2-investor-icon{
+  width:40px;height:40px;flex-shrink:0;border-radius:12px;
+  background:rgba(10,92,54,.55);border:1px solid rgba(201,168,76,.3);
+  display:flex;align-items:center;justify-content:center;
+}
+.r2-investor-icon svg{width:22px;height:22px;}
+.r2-investor-text{display:flex;flex-direction:column;gap:.1rem;}
+.r2-investor-name{font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;color:var(--gold);letter-spacing:.02em;}
+.r2-investor-desc{font-family:'DM Sans',sans-serif;font-size:.66rem;color:var(--muted);letter-spacing:.04em;}
+.r2-investor-btns{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;}
+.r2-investor-btn{
+  font-family:'Syne',sans-serif;font-weight:700;font-size:.72rem;letter-spacing:.06em;
+  padding:.55rem .6rem;border-radius:10px;cursor:pointer;border:1px solid var(--border);
+  background:rgba(0,0,0,.35);color:var(--gold);transition:all .2s;
+  display:flex;align-items:center;justify-content:center;gap:.35rem;
+}
+.r2-investor-btn:hover{background:var(--gold);color:#0a2e1c;border-color:var(--gold);}
+.r2-investor-btn.solid{background:var(--gold);color:#0a2e1c;border-color:var(--gold);}
+.r2-investor-btn.solid:hover{background:var(--gold-light);}
+
+/* ── Rider Hero (greeting + FU# badge + wallet hero + service grid) ───── */
+.rider-hero-wrap{margin-bottom:1rem;}
+.rider-hero-greeting{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:.85rem;}
+.rider-hero-hello{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:var(--text);letter-spacing:-.005em;line-height:1.15;}
+.rider-hero-hello-sub{font-family:'DM Sans',sans-serif;font-size:.82rem;color:var(--muted);margin-top:.2rem;}
+.rider-hero-fu{
+  flex-shrink:0;display:inline-flex;align-items:center;gap:.35rem;
+  background:rgba(201,168,76,.10);border:1px solid rgba(201,168,76,.4);
+  color:var(--gold);font-family:'Syne',sans-serif;font-size:.66rem;font-weight:700;
+  padding:.4rem .65rem;border-radius:999px;letter-spacing:.06em;text-transform:uppercase;
+}
+
+/* Wallet hero card */
+.wallet-hero{
+  position:relative;
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(201,168,76,.18), transparent 55%),
+    radial-gradient(ellipse at 100% 120%, rgba(10,92,54,.65), transparent 60%),
+    linear-gradient(135deg,#0e6b3f 0%, #0a5c36 50%, #06381f 100%);
+  border:1px solid rgba(201,168,76,.3);border-radius:20px;
+  padding:1.2rem 1.15rem;color:#fff;
+  box-shadow:0 16px 48px rgba(0,0,0,.42), 0 1px 0 rgba(255,255,255,.06) inset;
+  overflow:hidden;
+}
+.wallet-hero::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 70% -10%, rgba(255,255,255,.08), transparent 50%);
+  pointer-events:none;
+}
+.wallet-hero-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;}
+.wallet-hero-label{font-family:'Syne',sans-serif;font-size:.62rem;font-weight:700;color:rgba(255,255,255,.65);letter-spacing:.32em;text-transform:uppercase;}
+.wallet-hero-balance{font-family:'Syne',sans-serif;font-weight:800;font-size:2.2rem;color:#fff;letter-spacing:-.01em;margin-top:.3rem;line-height:1;}
+.wallet-hero-mark{width:34px;height:34px;border-radius:50%;background:#0a5c36;flex-shrink:0;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);}
+.wallet-hero-mark img{width:34px;height:34px;border-radius:50%;display:block;}
+.wallet-hero-actions{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:1.1rem;}
+.wallet-hero-btn{
+  font-family:'Syne',sans-serif;font-size:.78rem;font-weight:700;letter-spacing:.04em;
+  padding:.7rem .6rem;border-radius:12px;cursor:pointer;border:1px solid var(--gold);
+  background:var(--gold);color:#0a2e1c;
+  transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.35rem;
+}
+.wallet-hero-btn:hover{background:var(--gold-light);border-color:var(--gold-light);}
+.wallet-hero-btn.outline{background:transparent;color:var(--gold);}
+.wallet-hero-btn.outline:hover{background:rgba(201,168,76,.15);}
+.fw-tag{
+  display:flex;align-items:center;justify-content:center;gap:.4rem;
+  margin-top:.95rem;padding-top:.85rem;border-top:1px solid rgba(255,255,255,.08);
+  font-family:'DM Sans',sans-serif;font-size:.66rem;color:rgba(255,255,255,.55);letter-spacing:.04em;
+}
+.fw-dot{width:6px;height:6px;border-radius:50%;background:#ff6f00;box-shadow:0 0 8px rgba(255,111,0,.7);}
+
+/* Service grid (6-up) */
+.svc-section-title{font-family:'Syne',sans-serif;font-size:.7rem;font-weight:700;color:var(--muted);letter-spacing:.28em;text-transform:uppercase;margin:1.4rem 0 .6rem 2px;}
+.svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;}
+.svc-tile{
+  position:relative;
+  background:linear-gradient(180deg, rgba(255,255,255,.03) 0%, rgba(255,255,255,.01) 100%);
+  border:1px solid rgba(201,168,76,.18);border-radius:14px;
+  padding:.85rem .55rem .8rem;cursor:pointer;text-align:center;
+  transition:all .22s cubic-bezier(.2,.8,.2,1);
+}
+.svc-tile:hover,.svc-tile:active{border-color:rgba(201,168,76,.55);transform:translateY(-2px);background:linear-gradient(180deg, rgba(201,168,76,.06) 0%, rgba(201,168,76,.02) 100%);box-shadow:0 8px 20px rgba(201,168,76,.12);}
+.svc-tile.active{border-color:var(--gold);background:linear-gradient(180deg, rgba(201,168,76,.12) 0%, rgba(201,168,76,.04) 100%);box-shadow:0 8px 20px rgba(201,168,76,.18);}
+.svc-tile-icon{display:flex;align-items:center;justify-content:center;height:28px;margin-bottom:.4rem;}
+.svc-tile-icon svg{width:24px;height:24px;}
+.svc-tile-name{font-family:'Syne',sans-serif;font-weight:700;font-size:.74rem;color:var(--text);letter-spacing:.04em;}
+.svc-tile-badge{
+  position:absolute;top:.35rem;right:.4rem;
+  font-family:'Syne',sans-serif;font-size:.5rem;font-weight:700;
+  background:var(--gold);color:#0a2e1c;
+  padding:.12rem .35rem;border-radius:6px;letter-spacing:.08em;
+}
+
+/* ── Transition Overlay ────────────────────────────────────────────────── */
+#txOverlay{
+  position:fixed;inset:0;z-index:9997;
+  background:radial-gradient(ellipse at 50% 38%, #0e6b3f 0%, #0a5c36 38%, #06381f 100%);
+  display:none;align-items:center;justify-content:center;flex-direction:column;
+  pointer-events:none;opacity:0;transition:opacity .25s ease;
+}
+#txOverlay.show{display:flex;opacity:1;}
+#txOverlay.entrance{transition:opacity .5s ease;}
+.tx-mark{width:88px;height:88px;border-radius:50%;background:#0a5c36;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 36px rgba(0,0,0,.4);}
+.tx-mark img{width:88px;height:88px;border-radius:50%;display:block;}
+#txOverlay .tx-word{
+  font-family:'Syne',sans-serif;font-weight:800;font-size:2.1rem;letter-spacing:.14em;color:var(--gold);
+  margin-top:1rem;
+}
+#txOverlay .tx-tag{
+  font-family:'DM Sans',sans-serif;font-style:italic;color:var(--gold);font-size:.85rem;
+  margin-top:.4rem;opacity:.8;
+}
+#txOverlay.beat .tx-mark{animation:txPulse 1.2s ease-in-out;}
+@keyframes txPulse{
+  0%{transform:scale(.92);opacity:.5;}
+  40%{transform:scale(1.04);opacity:1;}
+  100%{transform:scale(1);opacity:1;}
+}
 </style>
 </head>
 <body>
 
-<!-- SPLASH -->
-<div id="splash" onclick="hideSplash()">
-  <div style="display:flex;flex-direction:column;align-items:center;">
-    <!-- Logo Mark -->
-    <img src="data:image/png;base64,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" width="72" height="72" alt="AURAA Logo" style="margin-bottom:1rem;"/>
-    <div class="splash-logo auraa-wordmark" style="font-size:3rem;">AURAA</div>
-    <div class="auraa-reg">Technologies Limited</div>
-    <div style="color:var(--gold);font-size:.8rem;margin-top:.3rem;font-style:italic;opacity:.8;">Relax. We've got this!</div>
-    <div class="splash-tagline">Coordinated mobility infrastructure for emerging-market megacities.<br/>Launching Lagos 2026, architected for cross-border scale.</div>
-    <div class="splash-tap">TAP TO ENTER</div>
+<!-- SPLASH v11.1 -->
+<div id="splash" class="s2" onclick="hideSplash()">
+  <div class="s2-stack">
+    <div class="s2-mark"><img src="data:image/webp;base64,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" alt="AURAA"/></div>
+    <div class="s2-word auraa-wordmark">AURAA</div>
+    <div class="s2-divider"></div>
+    <div class="s2-tag">Relax. We&#39;ve got this!</div>
+    <div class="s2-position">Coordinated mobility infrastructure for emerging-market megacities.<br/>Launching Lagos 2026 — architected for cross-border scale.</div>
+    <div class="s2-reg">AURAA Technologies Limited &nbsp;·&nbsp; RC 9058278</div>
+    <div class="s2-tap">Tap to Enter</div>
   </div>
 </div>
 
-<!-- ROLE SELECT -->
-<div id="roleSelect">
-  <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:1.5rem;">
-    <img src="data:image/png;base64,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" width="44" height="44" alt="AURAA Logo" style="margin-bottom:.5rem;"/>
-    <div class="role-title" style="margin-bottom:.2rem;">Welcome to AURAA</div>
-    <div class="role-sub" style="margin-bottom:0;">Select your role to continue</div>
-  </div>
-  <div class="role-cards">
-    <div class="role-card" onclick="selectRole('rider')">
-      <div class="role-icon">🧍</div>
-      <div class="role-name">Rider</div>
-      <div class="role-desc">Book trips &amp; manage wallet</div>
+<!-- ROLE SELECT v11.1 -->
+<div id="roleSelect" class="r2">
+  <div class="r2-stack">
+    <div class="r2-mark"><img src="data:image/webp;base64,UklGRggDAABXRUJQVlA4IPwCAAAQEQCdASpAAEAAPj0YikOiIaEUDAdUIAPEsQBihcdFjkx25uYRPfBd6rPmA893oquo75939o/he/bH0gIsCYTWrxGGSUq98JczL/P8Cb+tyHokzsG3uKIf85BD52Lx6HR3+l9pqOG0zvoba2qXrqio7Q93E6DzEHn1UZ90dxBQCgiNNaiJgp6d0LZk9uK9NPmAAP7/Y4jqyLsQY0o1xgr+JTI7H/c3HPEEWhqkaOMUeSEv5v1+Yb2nJXvC+GVblZ8741m9/CZbbMdTxKnrvRnimcI8KTSynyP+fHR0ZXcUBQGtmAVeMk01dBVKR2jnzHHw9vGJaJEbTyjU4UdB16LnleVNGkMquwF326pG8XI2NXyasF3m4Ej1bnY0LsoA0pXjNzuk2M2Vv/NE6puScsjPs+drlmlgeKbdLYwd2n34tN0fBnH8ZC4l5jfOP+eax2OHGLzsGcjTQB3CoO//Wn3n57p9wJjOJlksP91z9WiINqxoWoG3KdGB/0R1377KKYy8srKGSukbXMGZPum5YzBPnxKqbqO2QDgAG5pIf5H1B9C9jjqx+YHb+1V794iv2n632b6t5+5UuzBSSEitqGo/dTI8oZpsVuTuzaOMYd2x1Il7vWn113s2ob1h/ObPUYfT9Lv4TXujal1TudJv8JilRUUXPMv7db4EAqSeMczzlhVpRCPtmLFT4xY6kMqr+fhkOJclhcBXSaxwRYBhViRVX+boZoqoJec9ja7JLSmEpxV0qZtWcuGnsRY0TEL3IncYqGaxdB3V/ebPcmqpbDrPcvuM340vaFYB1zIHkAUv66WvZohW3UPegusVWsIv4k+KYmb/859jHNsMqGgnCTpieKtHMHouXPiE8I3nNY79wuSuWO8kCSjY9fZ5z3SIUCMcUiaHjVoXxML686WJT3GHiDvk/xv2WuOrell5ONHPM28tQ1m7wkRJs4s31jMcM6C0ZwxzDJtvTFy4JeWRGc8G7bYOzfnJeiBtaD6aowEgYhXsgYPIwD/QAAAAAA==" alt="AURAA"/></div>
+    <div class="r2-title">Welcome to AURAA</div>
+    <div class="r2-sub">Select your role to continue</div>
+
+    <div class="r2-section">I want to ride</div>
+    <div class="r2-rider" onclick="selectRole('rider')" role="button" aria-label="Continue as Rider">
+      <div class="r2-rider-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="6" r="3"/>
+          <path d="M5 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/>
+        </svg>
+      </div>
+      <div class="r2-rider-text">
+        <div class="r2-rider-name">Rider</div>
+        <div class="r2-rider-desc">Book trips · manage wallet · track journey</div>
+      </div>
+      <div class="r2-rider-arrow">›</div>
     </div>
-    <div class="role-card" onclick="selectRole('driver')">
-      <div class="role-icon">🚗</div>
-      <div class="role-name">Driver / Skater</div>
-      <div class="role-desc">Accept trips &amp; earn</div>
+
+    <div class="r2-section">I want to earn</div>
+    <div class="r2-grid">
+      <div class="r2-tile" onclick="selectRole('driver')" role="button" aria-label="Continue as Driver or Skater">
+        <div class="r2-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 13l2-5a2 2 0 0 1 1.9-1.4h10.2A2 2 0 0 1 19 8l2 5"/>
+            <path d="M3 13v5a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-1h10v1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-5"/>
+            <circle cx="7" cy="14" r="1.2" fill="#c9a84c"/>
+            <circle cx="17" cy="14" r="1.2" fill="#c9a84c"/>
+          </svg>
+        </div>
+        <div class="r2-tile-name">Driver / Skater</div>
+        <div class="r2-tile-desc">Drive fleet vehicles · accept trips</div>
+      </div>
+      <div class="r2-tile" onclick="selectRole('owner')" role="button" aria-label="Continue as Vehicle Owner">
+        <div class="r2-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 21V10l9-7 9 7v11"/>
+            <path d="M9 21v-7h6v7"/>
+            <circle cx="12" cy="11" r="1.3" fill="#c9a84c"/>
+          </svg>
+        </div>
+        <div class="r2-tile-name">Vehicle Owner</div>
+        <div class="r2-tile-desc">Activate ASSIST · monitor fleet</div>
+      </div>
+      <div class="r2-tile" onclick="selectRole('biker')" role="button" aria-label="Continue as Bike Rider">
+        <div class="r2-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="6" cy="17" r="3"/>
+            <circle cx="18" cy="17" r="3"/>
+            <path d="M6 17l3-7h4l3 5"/>
+            <path d="M9 10l-1-3h2"/>
+          </svg>
+        </div>
+        <div class="r2-tile-name">Bike Rider</div>
+        <div class="r2-tile-desc">Motorcycle dispatch · fast trips</div>
+      </div>
+      <div class="r2-tile" onclick="selectRole('bicycler')" role="button" aria-label="Continue as Bicycle Rider">
+        <div class="r2-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="5.5" cy="17.5" r="3"/>
+            <circle cx="18.5" cy="17.5" r="3"/>
+            <path d="M5.5 17.5l4-7 5 7"/>
+            <path d="M9 10h3l2 4"/>
+            <path d="M14 6h2"/>
+          </svg>
+        </div>
+        <div class="r2-tile-name">Bicycle Rider</div>
+        <div class="r2-tile-desc">Eco couriers · short hops</div>
+      </div>
+      <div class="r2-tile" onclick="selectRole('mechanic')" role="button" aria-label="Continue as Mechanic">
+        <div class="r2-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a1.4 1.4 0 0 0 2 2l6-6a4 4 0 0 0 5.4-5.4l-2.3 2.3-2.4-.6-.6-2.4z"/>
+          </svg>
+        </div>
+        <div class="r2-tile-name">Mechanic</div>
+        <div class="r2-tile-desc">Fix-it jobs · ₦5k/month</div>
+      </div>
+      <div class="r2-tile locked" onclick="showAdminGate()" role="button" aria-label="Admin Access">
+        <div class="r2-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 2v3m0 14v3M4.2 4.2l2.1 2.1m11.4 11.4l2.1 2.1M2 12h3m14 0h3M4.2 19.8l2.1-2.1m11.4-11.4l2.1-2.1"/>
+          </svg>
+        </div>
+        <div class="r2-tile-name">Admin</div>
+        <div class="r2-tile-desc">Restricted access</div>
+      </div>
     </div>
-    <div class="role-card" onclick="selectRole('owner')">
-      <div class="role-icon">🏢</div>
-      <div class="role-name">Owner</div>
-      <div class="role-desc">Car, bike or both</div>
-    </div>
-    <div class="role-card" onclick="selectRole('biker')">
-      <div class="role-icon">🏍️</div>
-      <div class="role-name">Bike Rider</div>
-      <div class="role-desc">Dispatch deliveries</div>
-    </div>
-    <div class="role-card" onclick="selectRole('bicycler')">
-      <div class="role-icon">🚲</div>
-      <div class="role-name">Bicycle Rider</div>
-      <div class="role-desc">Short-range eco delivery</div>
-    </div>
-    <div class="role-card" onclick="selectRole('mechanic')">
-      <div class="role-icon">🔧</div>
-      <div class="role-name">Mechanic</div>
-      <div class="role-desc">Fix-it jobs · ₦5k/month</div>
-    </div>
-    <div class="role-card locked" onclick="showAdminGate()">
-      <div class="lock-icon">🔒</div>
-      <div class="role-icon">⚙️</div>
-      <div class="role-name">Admin</div>
-      <div class="role-desc">Restricted access</div>
-    </div>
-  </div>
-  <div style="width:100%;max-width:380px;margin-top:.75rem;">
-    <div class="role-card investor-card" style="display:grid;gap:.5rem;">
-      <div style="font-size:2rem;text-align:center;">📊</div>
-      <div class="role-name" style="text-align:center;">Investor Access</div>
-      <div class="role-desc" style="text-align:center;">Pre-Seed • NDA Protected</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.25rem;">
-        <button class="btn btn-gold btn-sm" onclick="openInvestorDeck('vc')">🏦 VC Deck</button>
-        <button class="btn btn-primary btn-sm" onclick="openInvestorDeck('hni')">👤 HNI Deck</button>
+
+    <div class="r2-investor">
+      <div class="r2-investor-head">
+        <div class="r2-investor-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 3v18h18"/>
+            <path d="M7 16l4-5 3 3 5-7"/>
+          </svg>
+        </div>
+        <div class="r2-investor-text">
+          <div class="r2-investor-name">Investor Access</div>
+          <div class="r2-investor-desc">Pre-Seed &nbsp;·&nbsp; NDA Protected</div>
+        </div>
+      </div>
+      <div class="r2-investor-btns">
+        <button class="r2-investor-btn solid" onclick="openInvestorDeck('vc')">VC Deck</button>
+        <button class="r2-investor-btn" onclick="openInvestorDeck('hni')">HNI Deck</button>
       </div>
     </div>
   </div>
@@ -726,7 +1043,56 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
   </div>
 </div>
 
+<!-- TRANSITION OVERLAY v11.1 -->
+<div id="txOverlay" aria-hidden="true">
+  <div class="tx-mark"><img src="data:image/webp;base64,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" alt=""/></div>
+  <div class="tx-word auraa-wordmark">AURAA</div>
+  <div class="tx-tag">Relax. We&#39;ve got this!</div>
+</div>
+
 <script>
+// ═══════════════════════════════════════════════
+// TRANSITION MODULE — v11.1
+// Cinematic overlay used between role-select, trip-search, and trip-complete.
+// Three flavors:
+//   light(): 600ms quick fade, used on route changes
+//   beat(ms=1200): pulse the AURAA mark, used on commit moments
+//   entrance(): 2500ms full-bleed reveal (reserved for re-entry from background)
+// All flavors are no-op-safe if #txOverlay is missing, so legacy paths don't break.
+// ═══════════════════════════════════════════════
+const Transition = (function(){
+  let busy = false;
+  function el(){ return document.getElementById('txOverlay'); }
+  function clearClasses(o){ o.classList.remove('show','beat','entrance'); }
+  function light(){
+    const o = el(); if(!o) return;
+    busy = true;
+    clearClasses(o);
+    requestAnimationFrame(()=>{ o.classList.add('show'); });
+    setTimeout(()=>{ if(!o) return; o.classList.remove('show'); }, 350);
+    setTimeout(()=>{ busy = false; }, 600);
+  }
+  function beat(ms){
+    const dur = (typeof ms === 'number' && ms > 0) ? ms : 1200;
+    const o = el(); if(!o) return;
+    busy = true;
+    clearClasses(o);
+    requestAnimationFrame(()=>{ o.classList.add('show','beat'); });
+    setTimeout(()=>{ if(!o) return; o.classList.remove('show','beat'); }, dur - 200);
+    setTimeout(()=>{ busy = false; }, dur);
+  }
+  function entrance(){
+    const o = el(); if(!o) return;
+    busy = true;
+    clearClasses(o);
+    requestAnimationFrame(()=>{ o.classList.add('show','entrance'); });
+    setTimeout(()=>{ if(!o) return; o.classList.remove('show','entrance'); }, 2300);
+    setTimeout(()=>{ busy = false; }, 2500);
+  }
+  function isBusy(){ return busy; }
+  return { light, beat, entrance, isBusy };
+})();
+
 // ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
@@ -2562,6 +2928,7 @@ function autoLaunchJourneyIfNeeded(role){
 }
 
 function selectRole(role){
+  Transition.light();
   S.role = role;
   document.getElementById('roleSelect').classList.remove('show');
   document.getElementById('appHeader').classList.add('show');
@@ -2625,6 +2992,9 @@ function buildTabs(){
 }
 
 function renderTab(i){
+  // v11.1 — Owner ASSIST is a commit moment (dispatching their own vehicle), so beat the AURAA mark.
+  // Only fire on actual tab change, not on re-render of the same tab.
+  if(S.role === 'owner' && i === 1 && S.tab !== 1){ Transition.beat(1200); }
   S.tab=i;
   document.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('active',j===i));
   const mc=document.getElementById('mainContent');
@@ -2953,6 +3323,90 @@ function renderBook(){
   if(S.service==='assist'||S.service==='fix') S.service='go';
   const mc=document.getElementById('mainContent');
   mc.innerHTML=`
+  <div class="rider-hero-wrap">
+    <div class="rider-hero-greeting">
+      <div>
+        <div class="rider-hero-hello">Welcome back, ${(IdentityStore.current()?.name?.split(' ')[0]) || 'there'}</div>
+        <div class="rider-hero-hello-sub">What ride do you need today?</div>
+      </div>
+      ${(()=>{ const seq = (IdentityStore.current()?.email) ? FU.getSeq(IdentityStore.current().email) : null; return seq ? `<div class="rider-hero-fu">✦ FU #${String(seq).padStart(3,'0')}</div>` : ''; })()}
+    </div>
+
+    <div class="wallet-hero">
+      <div class="wallet-hero-head">
+        <div>
+          <div class="wallet-hero-label">AURAA Wallet</div>
+          <div class="wallet-hero-balance">₦${S.riderWallet.toLocaleString()}</div>
+        </div>
+        <div class="wallet-hero-mark"><img src="data:image/webp;base64,UklGRggDAABXRUJQVlA4IPwCAAAQEQCdASpAAEAAPj0YikOiIaEUDAdUIAPEsQBihcdFjkx25uYRPfBd6rPmA893oquo75939o/he/bH0gIsCYTWrxGGSUq98JczL/P8Cb+tyHokzsG3uKIf85BD52Lx6HR3+l9pqOG0zvoba2qXrqio7Q93E6DzEHn1UZ90dxBQCgiNNaiJgp6d0LZk9uK9NPmAAP7/Y4jqyLsQY0o1xgr+JTI7H/c3HPEEWhqkaOMUeSEv5v1+Yb2nJXvC+GVblZ8741m9/CZbbMdTxKnrvRnimcI8KTSynyP+fHR0ZXcUBQGtmAVeMk01dBVKR2jnzHHw9vGJaJEbTyjU4UdB16LnleVNGkMquwF326pG8XI2NXyasF3m4Ej1bnY0LsoA0pXjNzuk2M2Vv/NE6puScsjPs+drlmlgeKbdLYwd2n34tN0fBnH8ZC4l5jfOP+eax2OHGLzsGcjTQB3CoO//Wn3n57p9wJjOJlksP91z9WiINqxoWoG3KdGB/0R1377KKYy8srKGSukbXMGZPum5YzBPnxKqbqO2QDgAG5pIf5H1B9C9jjqx+YHb+1V794iv2n632b6t5+5UuzBSSEitqGo/dTI8oZpsVuTuzaOMYd2x1Il7vWn113s2ob1h/ObPUYfT9Lv4TXujal1TudJv8JilRUUXPMv7db4EAqSeMczzlhVpRCPtmLFT4xY6kMqr+fhkOJclhcBXSaxwRYBhViRVX+boZoqoJec9ja7JLSmEpxV0qZtWcuGnsRY0TEL3IncYqGaxdB3V/ebPcmqpbDrPcvuM340vaFYB1zIHkAUv66WvZohW3UPegusVWsIv4k+KYmb/859jHNsMqGgnCTpieKtHMHouXPiE8I3nNY79wuSuWO8kCSjY9fZ5z3SIUCMcUiaHjVoXxML686WJT3GHiDvk/xv2WuOrell5ONHPM28tQ1m7wkRJs4s31jMcM6C0ZwxzDJtvTFy4JeWRGc8G7bYOzfnJeiBtaD6aowEgYhXsgYPIwD/QAAAAAA==" alt=""/></div>
+      </div>
+      <div class="wallet-hero-actions">
+        <button class="wallet-hero-btn" onclick="fundWallet()">+ Fund Wallet</button>
+        <button class="wallet-hero-btn outline" onclick="withdrawWallet()">↑ Withdraw</button>
+      </div>
+      <div class="fw-tag"><span class="fw-dot"></span> Powered by Flutterwave</div>
+    </div>
+
+    <div class="svc-section-title">Choose a Service</div>
+    <div class="svc-grid">
+      <div class="svc-tile${S.service==='go'?' active':''}" onclick="setService('go')">
+        <div class="svc-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 13l2-5a2 2 0 0 1 1.9-1.4h10.2A2 2 0 0 1 19 8l2 5"/>
+            <path d="M3 13v5a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-1h10v1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-5"/>
+            <circle cx="7" cy="14" r="1.2" fill="#c9a84c"/><circle cx="17" cy="14" r="1.2" fill="#c9a84c"/>
+          </svg>
+        </div>
+        <div class="svc-tile-name">Go</div>
+      </div>
+      <div class="svc-tile" onclick="showToast('AURAA ASSIST is owner-activated — request from a vehicle owner\'s dashboard.')">
+        <div class="svc-tile-badge">OWNER</div>
+        <div class="svc-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="8" r="3"/>
+            <path d="M5 21v-1a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v1"/>
+            <path d="M15 4l1.5 1.5L20 2"/>
+          </svg>
+        </div>
+        <div class="svc-tile-name">Assist</div>
+      </div>
+      <div class="svc-tile${S.service==='bike'?' active':''}" onclick="setService('bike')">
+        <div class="svc-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/>
+            <path d="M6 17l3-7h4l3 5"/><path d="M9 10l-1-3h2"/>
+          </svg>
+        </div>
+        <div class="svc-tile-name">Bike</div>
+      </div>
+      <div class="svc-tile" onclick="showToast('Bicycle service launching with bicycle riders onboard.')">
+        <div class="svc-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="5.5" cy="17.5" r="3"/><circle cx="18.5" cy="17.5" r="3"/>
+            <path d="M5.5 17.5l4-7 5 7"/><path d="M9 10h3l2 4"/><path d="M14 6h2"/>
+          </svg>
+        </div>
+        <div class="svc-tile-name">Bicycle</div>
+      </div>
+      <div class="svc-tile${S.service==='skate'?' active':''}" onclick="setService('skate')">
+        <div class="svc-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 16h18"/><circle cx="6" cy="19" r="1.4"/><circle cx="11" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/>
+            <path d="M5 12c2 0 3-2 6-2s4 2 7 2"/>
+          </svg>
+        </div>
+        <div class="svc-tile-name">Skate</div>
+      </div>
+      <div class="svc-tile" onclick="showToast('Fix-it requests run from the Fix-it tab — available to drivers, owners, and bikers.')">
+        <div class="svc-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a1.4 1.4 0 0 0 2 2l6-6a4 4 0 0 0 5.4-5.4l-2.3 2.3-2.4-.6-.6-2.4z"/>
+          </svg>
+        </div>
+        <div class="svc-tile-name">Fix-it</div>
+      </div>
+    </div>
+  </div>
   <div class="card">
     <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:10px;padding:.65rem .85rem;margin-bottom:1rem;font-size:.75rem;color:var(--gold);">
       🚗 <strong>AURAA ASSIST</strong> is owner-activated — triggered from a vehicle owner's dashboard, not booked here.
@@ -3131,6 +3585,7 @@ function _doBookTrip(fare, rider){
   if(S.riderWallet<fare){showToast('Insufficient wallet balance. Please fund.');return;}
   S.riderWallet-=fare;
   S.tripState='searching';
+  Transition.beat(1200);
 
   const pickup = LS.pickup?.name || 'Victoria Island';
   const dropoff = LS.dropoff?.name || 'Lekki Phase 1';
@@ -3231,6 +3686,7 @@ function completeTrip(){
   const svcUp = (S.service||'go').toUpperCase();
   const insured = (svcUp === 'GO' || svcUp === 'ASSIST');
   S.tripState='idle'; S.tripProgress=0;
+  Transition.beat(1200);
   // Save to completed trips so admin and rider history update
   const liveTrip=JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
   if(liveTrip){
