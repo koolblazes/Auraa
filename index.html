@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v10.7 Complete</title>
+<title>AURAA Technologies — MVP v11 Complete</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root {
@@ -592,7 +592,7 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
     <div class="splash-logo auraa-wordmark" style="font-size:3rem;">AURAA</div>
     <div class="auraa-reg">Technologies Limited</div>
     <div style="color:var(--gold);font-size:.8rem;margin-top:.3rem;font-style:italic;opacity:.8;">Relax. We've got this!</div>
-    <div class="splash-tagline">Assured Urban Ride &amp; Assistance<br/>Redefining mobility infrastructure across Africa</div>
+    <div class="splash-tagline">Coordinated mobility infrastructure for emerging-market megacities.<br/>Launching Lagos 2026, architected for cross-border scale.</div>
     <div class="splash-tap">TAP TO ENTER</div>
   </div>
 </div>
@@ -629,6 +629,11 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
       <div class="role-icon">🚲</div>
       <div class="role-name">Bicycle Rider</div>
       <div class="role-desc">Short-range eco delivery</div>
+    </div>
+    <div class="role-card" onclick="selectRole('mechanic')">
+      <div class="role-icon">🔧</div>
+      <div class="role-name">Mechanic</div>
+      <div class="role-desc">Fix-it jobs · ₦5k/month</div>
     </div>
     <div class="role-card locked" onclick="showAdminGate()">
       <div class="lock-icon">🔒</div>
@@ -837,6 +842,7 @@ const ROLES = {
   skater:   {emoji:'🛼',  label:'Skater',        purpose:'Fast dispatch on skates'},
   biker:    {emoji:'🏍️',  label:'Bike Rider',    purpose:'Dispatch rider network'},
   bicycler: {emoji:'🚲',  label:'Bicycle Rider', purpose:'Short-range eco delivery'},
+  mechanic: {emoji:'🔧',  label:'Mechanic',      purpose:'Fix-it jobs · vetted network'},
 };
 
 // ═══════════════════════════════════════════════
@@ -845,8 +851,8 @@ const ROLES = {
 // questionnaire, savings pledge, cross-role eligibility.
 // ═══════════════════════════════════════════════
 const FU = {
-  CAPS: { rider:5000, driver:500, owner:600, biker:300, bicycler:200 },
-  TOTAL: 6600,
+  CAPS: { rider:5000, driver:500, owner:600, biker:300, bicycler:200, mechanic:200 },
+  get TOTAL(){ return Object.values(this.CAPS).reduce((a,b)=>a+b,0); },
   _seqKey: 'auraa_fu_seq',
   _rolesKey: 'auraa_fu_roles',
   _surveyKey: 'auraa_fu_survey',
@@ -872,7 +878,7 @@ const FU = {
   },
   countPerRole(){
     const rolesMap = JSON.parse(localStorage.getItem(this._rolesKey) || '{}');
-    const counts = { rider:0, driver:0, owner:0, biker:0, bicycler:0 };
+    const counts = { rider:0, driver:0, owner:0, biker:0, bicycler:0, mechanic:0, skater:0 };
     for(const email in rolesMap){
       (rolesMap[email]||[]).forEach(r => { if(counts[r] !== undefined) counts[r]++; });
     }
@@ -1271,6 +1277,7 @@ function requireIdentity(purpose, opts){
       // v10.7 hotfix 8 — onboarding extras
       vehicle_type: '',      // Owner only
       plate_number: '',      // Owner only
+      bike_ownership: '',    // Owner-Motorcycle only: 'self' | 'fleet'
       skater_drives: undefined, // Skater only (true/false/undefined)
     };
 
@@ -1305,6 +1312,7 @@ function requireIdentity(purpose, opts){
         // Conditional extras for add-role flow too
         if(state.role === 'owner') list.push(stepOwnerVehicle());
         if(state.role === 'skater') list.push(stepSkaterDualDrive());
+        if(state.role === 'mechanic') list.push(stepMechanic());
         list.push(stepRoleQuestion(), stepSummary());
         return list;
       }
@@ -1316,6 +1324,8 @@ function requireIdentity(purpose, opts){
       if(state.role === 'owner') list.push(stepOwnerVehicle());
       // Conditional Skater dual-drive opt-in step
       if(state.role === 'skater') list.push(stepSkaterDualDrive());
+      // v11 — Mechanic profile step (specialty, service area)
+      if(state.role === 'mechanic') list.push(stepMechanic());
       list.push(stepSharedQ1(), stepSharedQ2(), stepRoleQuestion(), stepPledge(), stepSummary());
       return list;
     }
@@ -1395,7 +1405,7 @@ function requireIdentity(purpose, opts){
     }
 
     function stepRole(){
-      const roleKeys = ['rider','driver','owner','biker','bicycler','skater'];
+      const roleKeys = ['rider','driver','owner','biker','bicycler','skater','mechanic'];
       const caps = FU.countPerRole();
       const slotsFor = (r) => {
         const cap = FU.CAPS[r] !== undefined ? FU.CAPS[r] : 500;
@@ -1515,6 +1525,21 @@ function requireIdentity(purpose, opts){
     // v10.7 hotfix 8 — Owner-only: vehicle type + plate number
     function stepOwnerVehicle(){
       const types = ['Sedan / Saloon', 'SUV', 'Motorcycle', 'Bicycle'];
+      // v11 — Motorcycle owners split into two tracks: self-owned vs fleet-operated
+      const bikeOwnershipBlock = `
+        <div id="wizBikeOwnWrap" style="display:${state.vehicle_type==='Motorcycle'?'block':'none'};margin-bottom:.9rem;">
+          <div style="font-size:.7rem;color:var(--muted);margin-bottom:.4rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Do you own this motorcycle?</div>
+          <div class="jrn-chip-grid" id="wizBikeOwn">
+            <button class="jrn-chip${state.bike_ownership==='self'?' selected':''}" data-own="self" type="button">
+              <div class="jrn-chip-primary">✓ Yes, it's mine</div>
+              <div style="font-size:.6rem;color:var(--muted);margin-top:.2rem;">Owner-operator split</div>
+            </button>
+            <button class="jrn-chip${state.bike_ownership==='fleet'?' selected':''}" data-own="fleet" type="button">
+              <div class="jrn-chip-primary">🏢 No, I ride fleet</div>
+              <div style="font-size:.6rem;color:var(--muted);margin-top:.2rem;">Fleet / logistics firm</div>
+            </button>
+          </div>
+        </div>`;
       return {
         title: 'Tell us about your vehicle.',
         hint: 'This helps us match you with the right driver pool. You can update these later.',
@@ -1526,6 +1551,7 @@ function requireIdentity(purpose, opts){
                 <div class="jrn-chip-primary">${t==='SUV'?'🚙':t==='Motorcycle'?'🏍️':t==='Bicycle'?'🚲':'🚗'} ${t}</div>
               </button>`).join('')}
           </div>
+          ${bikeOwnershipBlock}
           <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Plate number</div>
           <input class="ig-input" id="wizPlate" placeholder="e.g. LAG-234-KA" value="${(state.plate_number||'').replace(/"/g,'&quot;')}" style="text-transform:uppercase;letter-spacing:.05em;"/>
           <div style="font-size:.65rem;color:var(--gold);margin-top:.5rem;background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);border-radius:8px;padding:.55rem .7rem;">
@@ -1534,16 +1560,37 @@ function requireIdentity(purpose, opts){
           </div>`,
         focus: null,
         onMount: (stepEl)=>{
+          const bikeWrap = stepEl.querySelector('#wizBikeOwnWrap');
           stepEl.querySelectorAll('#wizVehType .jrn-chip').forEach(btn=>{
             btn.onclick = ()=>{
               stepEl.querySelectorAll('#wizVehType .jrn-chip').forEach(b=>b.classList.remove('selected'));
               btn.classList.add('selected');
               state.vehicle_type = btn.dataset.type;
+              // Toggle bike-ownership block; clear the value if leaving Motorcycle
+              if(bikeWrap){
+                if(state.vehicle_type === 'Motorcycle'){
+                  bikeWrap.style.display = 'block';
+                } else {
+                  bikeWrap.style.display = 'none';
+                  state.bike_ownership = '';
+                  stepEl.querySelectorAll('#wizBikeOwn .jrn-chip').forEach(b=>b.classList.remove('selected'));
+                }
+              }
+            };
+          });
+          stepEl.querySelectorAll('#wizBikeOwn .jrn-chip').forEach(btn=>{
+            btn.onclick = ()=>{
+              stepEl.querySelectorAll('#wizBikeOwn .jrn-chip').forEach(b=>b.classList.remove('selected'));
+              btn.classList.add('selected');
+              state.bike_ownership = btn.dataset.own;
             };
           });
         },
         validate: ()=>{
           if(!state.vehicle_type){ showToast('Pick a vehicle type'); return false; }
+          if(state.vehicle_type === 'Motorcycle' && !state.bike_ownership){
+            showToast('Tell us if the bike is yours or fleet'); return false;
+          }
           const plate = (document.getElementById('wizPlate')?.value || '').trim().toUpperCase();
           if(!plate){ showToast('Please enter your plate number'); return false; }
           state.plate_number = plate;
@@ -1591,6 +1638,63 @@ function requireIdentity(purpose, opts){
       };
     }
 
+    // v11 — Mechanic-only: specialty + service area
+    function stepMechanic(){
+      const specialties = [
+        'Engine & Transmission',
+        'Electrical & Electronics',
+        'Brakes & Clutch',
+        'Tyres & Suspension',
+        'AC & Cooling',
+        'Body & Panel Work',
+        'Diagnostics & OBD',
+        'General repair',
+      ];
+      const areas = [
+        'Victoria Island','Lekki Phase 1','Lekki Phase 2','Ikoyi','Ajah',
+        'Ikeja','Surulere','Yaba','Gbagada','Magodo','Other',
+      ];
+      return {
+        title: 'Your mechanic profile',
+        hint: 'This is what owners and drivers see when they tap Fix-it. You can update it later.',
+        body: `
+          <div style="font-size:.7rem;color:var(--muted);margin-bottom:.4rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Specialty</div>
+          <div class="jrn-chip-grid" id="wizMechSpec" style="margin-bottom:.9rem;">
+            ${specialties.map(s=>`
+              <button class="jrn-chip${state.mech_specialty===s?' selected':''}" data-spec="${s}" type="button" style="text-align:left;">
+                <div class="jrn-chip-primary" style="font-size:.78rem;">${s}</div>
+              </button>`).join('')}
+          </div>
+          <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Service area</div>
+          <select class="ig-input" id="wizMechArea" style="width:100%;">
+            <option value="">Select your primary area</option>
+            ${areas.map(a=>`<option value="${a}"${state.mech_area===a?' selected':''}>${a}</option>`).join('')}
+          </select>
+          <div style="font-size:.65rem;color:var(--success);margin-top:.75rem;background:rgba(62,207,120,.08);border:1px solid rgba(62,207,120,.25);border-radius:8px;padding:.55rem .7rem;line-height:1.5;">
+            🎁 <strong>First 30 days free.</strong> After that, ₦${MechanicStore.MONTHLY_FEE.toLocaleString()}/month to stay listed in the Fix-it picker. <strong>No commission on jobs — you keep 100% of repair fees.</strong>
+          </div>`,
+        focus: null,
+        onMount: (stepEl)=>{
+          stepEl.querySelectorAll('#wizMechSpec .jrn-chip').forEach(btn=>{
+            btn.onclick = ()=>{
+              stepEl.querySelectorAll('#wizMechSpec .jrn-chip').forEach(b=>b.classList.remove('selected'));
+              btn.classList.add('selected');
+              state.mech_specialty = btn.dataset.spec;
+            };
+          });
+        },
+        validate: ()=>{
+          if(!state.mech_specialty){ showToast('Pick your specialty'); return false; }
+          const area = document.getElementById('wizMechArea')?.value;
+          if(!area){ showToast('Select a service area'); return false; }
+          state.mech_area = area;
+          return true;
+        },
+        autoAdvance: false,
+        ctaLabel: 'Next →',
+      };
+    }
+
     function stepPledge(){
       return {
         title: '💰 AURAA Save → Own',
@@ -1630,7 +1734,7 @@ function requireIdentity(purpose, opts){
 
     function stepRoleOnly(){
       // Used for add-role flow only: returning user adding another role
-      const roleKeys = ['rider','driver','owner','biker','bicycler','skater'];
+      const roleKeys = ['rider','driver','owner','biker','bicycler','skater','mechanic'];
       const mine = FU.rolesFor(state.email);
       return {
         title: `Add another role, ${state.name.split(' ')[0]}?`,
@@ -1964,6 +2068,7 @@ function requireIdentity(purpose, opts){
           name: identity.name, email: identity.email, phone: identity.phone,
           vehicleType: state.vehicle_type || 'Sedan / Saloon',
           plate: state.plate_number || '',
+          bike_ownership: state.vehicle_type === 'Motorcycle' ? (state.bike_ownership || 'self') : '',
           fuSeq: identity.fuSeq,
         });
         const alloc = SmartCam.allocate(identity.email);
@@ -1984,6 +2089,21 @@ function requireIdentity(purpose, opts){
         if(vr.ok && !vr.duplicate){
           logEvent({ action:'Medical Voucher Issued', tag:'active', detail:`${identity.name} · ${vr.voucher.code}`, actor:identity });
         }
+      }
+      // v11 — Mechanic: register with MechanicStore, activate free 30-day trial
+      if(state.role === 'mechanic'){
+        const mechRecord = MechanicStore.register({
+          name: identity.name, email: identity.email, phone: identity.phone,
+          specialty: state.mech_specialty || 'General repair',
+          area: state.mech_area || 'Lagos',
+          fuSeq: identity.fuSeq,
+        });
+        logEvent({
+          action: 'Mechanic Onboarded',
+          tag: 'active',
+          detail: `${identity.name} · ${mechRecord.specialty} · ${mechRecord.area} · 30-day free trial`,
+          actor: identity,
+        });
       }
       // ═══════════════════════════════════════════════════════════════
 
@@ -2488,6 +2608,7 @@ const tabConfig = {
   biker:    ['Jobs','Earnings','Journey','Investor'],
   bicycler: ['Jobs','Earnings','Journey','Investor'],
   skater:   ['Jobs','Earnings','Journey','Investor'],
+  mechanic: ['Jobs','Earnings','Subscription','Journey','Investor'],
   admin:    ['Dashboard','Trips','Revenue','Visitors','Investor'],
 };
 
@@ -2515,6 +2636,7 @@ function renderTab(i){
     biker:    [renderBikerJobs,renderBikerEarnings,renderFoundingJourney,renderInvestorTab],
     bicycler: [renderBicyclerJobs,renderBikerEarnings,renderFoundingJourney,renderInvestorTab],
     skater:   [renderSkaterJobs,renderBikerEarnings,renderFoundingJourney,renderInvestorTab],
+    mechanic: [renderMechanicJobs,renderMechanicEarnings,renderMechanicSubscription,renderFoundingJourney,renderInvestorTab],
     admin:    [renderAdminDash,renderAdminTrips,renderAdminRevenue,renderAdminVisitors,renderInvestorTab],
   };
   (renders[S.role]||[])[i]?.();
@@ -2935,7 +3057,9 @@ function calcFare(){
   const minPerKm = surge > 1 ? 7 : 4;
   const durationMin = Math.round(distKm * minPerKm + Math.random() * 5);
   const f = computeFare(S.service, distKm, durationMin);
-  const splits = getSplits(S.service, f.total);
+  const _me = IdentityStore.current();
+  const _bikeOwnership = _me?.bike_ownership || Onboarding.owners().find(o=>o.email===_me?.email)?.bike_ownership || 'self';
+  const splits = getSplits(S.service, f.total, {bikeOwnership: _bikeOwnership});
   const surgeLabel = f.surge > 1 ? `<span style="color:#ff6b35;font-weight:700;">🔥 ${f.surge}× Peak Surge Active</span>` : `<span style="color:var(--success);">✓ Standard Rate</span>`;
   document.getElementById('fareResult').innerHTML=`
   <div class="card">
@@ -2969,14 +3093,21 @@ function calcFare(){
   </div>`;
 }
 
-function getSplits(svc,fare){
+function getSplits(svc,fare,ctx){
+  // v11: April 20 locks restored. Insurance & telco absorbed into Platform share as operational cost.
+  // Bike is two-track: self-owned (80/20) vs fleet-owned (60/20/20). ctx.bikeOwnership = 'self' | 'fleet'
+  // NOTE: Fix-it is connection-only — no per-job split. Platform revenue comes from
+  // the mechanic's monthly subscription, not from the repair transaction itself. This keeps
+  // AURAA out of the repair-warranty liability chain (see MechanicStore for subscription logic).
+  const bikeOwnership = (ctx && ctx.bikeOwnership) || 'self';
   const m={
-    go:     [['Driver (55%)',.55],['Vehicle Owner (25%)',.25],['Platform (10%)',.10],['Insurance (5%)',.05],['Telco (5%)',.05]],
-    assist: [['Driver (50%)',.50],['Platform (30%)',.30],['Owner Loyalty Credit (10%)',.10],['Insurance (5%)',.05],['Telco (5%)',.05]],
-    bike:   [['Rider (60%)',.60],['Bike Owner (30%)',.30],['Platform (10%)',.10]],
-    skate:  [['Rider (80%)',.80],['Platform (20%)',.20]],
-    bicycle:[['Rider (80%)',.80],['Platform (20%)',.20]],
-    fix:    [['Technician (70%)',.70],['Platform (30%)',.30]],
+    go:      [['Driver (55%)',.55],['Vehicle Owner (25%)',.25],['Platform (20%)',.20]],
+    assist:  [['Driver (50%)',.50],['Vehicle Owner (30%)',.30],['Platform (20%)',.20]],
+    bike:    bikeOwnership === 'fleet'
+              ? [['Biker (60%)',.60],['Bike Owner (20%)',.20],['Platform (20%)',.20]]
+              : [['Biker (80%)',.80],['Platform (20%)',.20]],
+    skate:   [['Skater (80%)',.80],['Platform (20%)',.20]],
+    bicycle: [['Cyclist (80%)',.80],['Platform (20%)',.20]],
   };
   return (m[svc]||m.go).map(([l,p])=>({l,v:Math.round(fare*p)}));
 }
@@ -4045,11 +4176,11 @@ function renderFixit(){
   <div class="card">
     <div class="card-title">Nearby Vetted Mechanics</div>
     <div style="font-size:.75rem;color:var(--muted);margin-top:-.5rem;margin-bottom:.85rem;">Tap Call or WhatsApp to connect directly.</div>
-    ${vettedMechanics.map(m=>`
+    ${MechanicStore.listForPicker().map(m=>`
     <div style="padding:.85rem 0;border-bottom:1px solid var(--border);">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem;">
         <div>
-          <div style="font-size:.87rem;font-weight:700;color:var(--text);">${m.name}</div>
+          <div style="font-size:.87rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:.35rem;">${m.name}${m.source==='registered'?`<span style="font-size:.6rem;background:rgba(10,92,54,.25);color:var(--gold);padding:.1rem .4rem;border-radius:10px;letter-spacing:.05em;">NEW</span>`:''}</div>
           <div style="font-size:.7rem;color:var(--gold);margin-top:.1rem;">${m.specialty}</div>
           <div style="font-size:.68rem;color:var(--muted);margin-top:.15rem;">📍 ${m.area} · ${m.distance}</div>
         </div>
@@ -4078,6 +4209,236 @@ function fixitCall(phone, name){
 function fixitWhatsApp(phone, name){
   const msg=encodeURIComponent('Hi ' + name + ', I found you on AURAA Fix-it. I need vehicle assistance. Are you available?');
   window.open('https://wa.me/234'+phone.substring(1)+'?text='+msg, '_blank');
+}
+
+// ═══════════════════════════════════════════════
+// MECHANIC MODULE (v11)
+// Connection-only model. AURAA earns via monthly subscription, NOT per-job commission.
+// This keeps AURAA out of the warranty/liability chain for repair work.
+// First month free at launch as onboarding incentive. ₦5,000/month from month 2.
+// ═══════════════════════════════════════════════
+const MechanicStore = {
+  KEY: 'auraa_mechanic_registry',
+  MONTHLY_FEE: 5000,
+  FREE_TRIAL_DAYS: 30,
+
+  all(){
+    try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); }
+    catch(e){ return []; }
+  },
+  byEmail(email){
+    return this.all().find(m => m.email && m.email.toLowerCase() === (email||'').toLowerCase()) || null;
+  },
+  register(profile){
+    const reg = this.all();
+    // Dedupe on email
+    const existing = reg.findIndex(m => m.email && profile.email && m.email.toLowerCase() === profile.email.toLowerCase());
+    const now = Date.now();
+    const record = Object.assign({
+      id: 'MECH-' + (now.toString(36).toUpperCase()),
+      joinedAt: now,
+      trialEndsAt: now + (this.FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000),
+      subscriptionStatus: 'trial',  // trial | active | paused | lapsed
+      monthsPaid: 0,
+      lastPaymentAt: null,
+      jobsReceived: 0,
+      rating: '—',
+    }, profile);
+    if(existing >= 0){ reg[existing] = Object.assign(reg[existing], record); }
+    else { reg.push(record); }
+    localStorage.setItem(this.KEY, JSON.stringify(reg));
+    return record;
+  },
+  // Status helpers
+  daysLeftInTrial(m){
+    if(!m || !m.trialEndsAt) return 0;
+    const diff = m.trialEndsAt - Date.now();
+    return Math.max(0, Math.ceil(diff / (24 * 60 * 60 * 1000)));
+  },
+  isInTrial(m){ return m && m.subscriptionStatus === 'trial' && this.daysLeftInTrial(m) > 0; },
+  isActive(m){ return m && (m.subscriptionStatus === 'active' || this.isInTrial(m)); },
+  paySubscription(email){
+    const reg = this.all();
+    const idx = reg.findIndex(m => m.email && m.email.toLowerCase() === email.toLowerCase());
+    if(idx < 0) return null;
+    reg[idx].subscriptionStatus = 'active';
+    reg[idx].monthsPaid = (reg[idx].monthsPaid || 0) + 1;
+    reg[idx].lastPaymentAt = Date.now();
+    localStorage.setItem(this.KEY, JSON.stringify(reg));
+    return reg[idx];
+  },
+  // Merge seed mechanics (vettedMechanics) + registered mechanics for Fix-it picker
+  listForPicker(){
+    const seed = (typeof vettedMechanics !== 'undefined' ? vettedMechanics : []).map(m => ({
+      ...m, source:'seed', subscriptionStatus:'active'
+    }));
+    const registered = this.all()
+      .filter(m => this.isActive(m))
+      .map((m,i) => ({
+        id: 'R'+(i+100),
+        name: m.name || '—',
+        specialty: m.specialty || 'General repair',
+        rating: m.rating || 'New · —⭐',
+        distance: m.area ? '—' : 'Unknown',
+        phone: m.phone || '',
+        area: m.area || '—',
+        source: 'registered',
+        subscriptionStatus: m.subscriptionStatus,
+      }));
+    return [...seed, ...registered];
+  },
+};
+
+// ── MECHANIC TAB: JOBS ─────────────────────────────────────────────
+function renderMechanicJobs(){
+  const mc = document.getElementById('mainContent');
+  const me = IdentityStore.current();
+  const mech = me ? MechanicStore.byEmail(me.email) : null;
+  const trial = MechanicStore.isInTrial(mech);
+  const daysLeft = MechanicStore.daysLeftInTrial(mech);
+
+  mc.innerHTML = `
+  <div class="card" style="padding:.85rem 1.1rem;border-color:var(--gold);">
+    <div style="display:flex;align-items:center;gap:.6rem;">
+      <span style="font-size:1.4rem;">🔧</span>
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:.95rem;color:var(--gold);">Mechanic Workspace</div>
+        <div style="font-size:.7rem;color:var(--muted);">${mech ? (trial ? `Free trial · ${daysLeft} days left` : (mech.subscriptionStatus==='active'?'Active subscription':'Subscription lapsed')) : 'Complete onboarding to activate'}</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Incoming Job Requests</div>
+    <div style="padding:1.5rem 0;text-align:center;">
+      <div style="font-size:2.5rem;opacity:.35;margin-bottom:.5rem;">📭</div>
+      <div style="font-size:.85rem;color:var(--text);font-weight:600;margin-bottom:.25rem;">No jobs yet</div>
+      <div style="font-size:.72rem;color:var(--muted);line-height:1.6;max-width:280px;margin:0 auto;">
+        When vehicle owners or drivers tap Fix-it nearby, you'll appear in their picker list.
+        They contact you directly via call or WhatsApp — AURAA does not take commission on repairs.
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">How Fix-it Works</div>
+    <div style="font-size:.78rem;line-height:1.7;color:var(--text);">
+      <div style="display:flex;gap:.5rem;margin-bottom:.5rem;"><span style="color:var(--gold);font-weight:800;">1.</span> Owner or driver has vehicle trouble → taps Fix-it</div>
+      <div style="display:flex;gap:.5rem;margin-bottom:.5rem;"><span style="color:var(--gold);font-weight:800;">2.</span> They see nearby vetted mechanics ranked by distance and rating</div>
+      <div style="display:flex;gap:.5rem;margin-bottom:.5rem;"><span style="color:var(--gold);font-weight:800;">3.</span> They contact you via Call or WhatsApp — you agree terms directly</div>
+      <div style="display:flex;gap:.5rem;margin-bottom:.5rem;"><span style="color:var(--gold);font-weight:800;">4.</span> You do the job. <strong>You keep 100% of the repair fee.</strong></div>
+      <div style="display:flex;gap:.5rem;"><span style="color:var(--gold);font-weight:800;">5.</span> AURAA earns only from your ₦${MechanicStore.MONTHLY_FEE.toLocaleString()}/month listing fee.</div>
+    </div>
+    <div style="margin-top:.9rem;background:rgba(62,207,120,.08);border:1px solid rgba(62,207,120,.25);border-radius:10px;padding:.6rem .75rem;font-size:.72rem;color:var(--success);line-height:1.5;">
+      🎁 <strong>First month free</strong> at launch — no payment required to get listed.
+    </div>
+  </div>`;
+}
+
+// ── MECHANIC TAB: EARNINGS ─────────────────────────────────────────
+function renderMechanicEarnings(){
+  const mc = document.getElementById('mainContent');
+  const me = IdentityStore.current();
+  const mech = me ? MechanicStore.byEmail(me.email) : null;
+  const jobs = mech ? (mech.jobsReceived || 0) : 0;
+
+  mc.innerHTML = `
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-val">${jobs}</div><div class="stat-lbl">Jobs Received</div></div>
+    <div class="stat-box"><div class="stat-val">100%</div><div class="stat-lbl">You Keep Per Job</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Earnings Model</div>
+    <div style="font-size:.8rem;line-height:1.7;color:var(--text);">
+      AURAA Fix-it is a <strong style="color:var(--gold);">connection layer</strong> — not a commission platform.
+      When an owner or driver hires you through AURAA, you agree pricing directly with them and keep
+      <strong style="color:var(--success);">100% of the fee.</strong>
+    </div>
+    <div style="margin-top:.85rem;padding:.7rem;background:rgba(201,168,76,.06);border-radius:10px;font-size:.72rem;color:var(--muted);line-height:1.6;">
+      AURAA's only cost to you is the monthly listing fee of ₦${MechanicStore.MONTHLY_FEE.toLocaleString()} —
+      see the <strong style="color:var(--gold);">Subscription</strong> tab for status and billing.
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Job History</div>
+    <div style="padding:1.25rem 0;text-align:center;font-size:.75rem;color:var(--muted);">
+      ${jobs === 0 ? 'No completed jobs logged yet. Start responding to Fix-it requests to build your track record.' : `${jobs} job${jobs===1?'':'s'} received to date.`}
+    </div>
+  </div>`;
+}
+
+// ── MECHANIC TAB: SUBSCRIPTION ─────────────────────────────────────
+function renderMechanicSubscription(){
+  const mc = document.getElementById('mainContent');
+  const me = IdentityStore.current();
+  const mech = me ? MechanicStore.byEmail(me.email) : null;
+  const trial = MechanicStore.isInTrial(mech);
+  const daysLeft = MechanicStore.daysLeftInTrial(mech);
+  const status = mech ? mech.subscriptionStatus : 'not_registered';
+  const monthsPaid = mech ? (mech.monthsPaid || 0) : 0;
+
+  let statusBadge, statusColor, statusLine;
+  if(!mech){
+    statusBadge = 'Not Registered';
+    statusColor = '#888';
+    statusLine = 'Complete Founding User registration as a Mechanic to activate your listing.';
+  } else if(trial){
+    statusBadge = 'Free Trial';
+    statusColor = 'var(--success)';
+    statusLine = `${daysLeft} day${daysLeft===1?'':'s'} left in your free launch trial. You'll be prompted to subscribe when the trial ends.`;
+  } else if(status === 'active'){
+    statusBadge = 'Active';
+    statusColor = 'var(--gold)';
+    statusLine = `Your listing is live. ${monthsPaid} month${monthsPaid===1?'':'s'} paid to date.`;
+  } else {
+    statusBadge = 'Lapsed';
+    statusColor = 'var(--danger)';
+    statusLine = 'Your listing is currently hidden from the Fix-it picker. Renew to reactivate.';
+  }
+
+  mc.innerHTML = `
+  <div class="card" style="border-color:${statusColor};">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.65rem;">
+      <div class="card-title" style="margin:0;">Subscription Status</div>
+      <span class="badge" style="background:${statusColor};color:var(--dark);font-size:.65rem;font-weight:800;padding:.2rem .6rem;border-radius:20px;">${statusBadge}</span>
+    </div>
+    <div style="font-size:.78rem;line-height:1.6;color:var(--text);">${statusLine}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Plan Details</div>
+    <div style="font-size:.8rem;line-height:1.9;">
+      <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Plan</span><strong>Mechanic Listing</strong></div>
+      <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Monthly fee</span><strong style="color:var(--gold);">₦${MechanicStore.MONTHLY_FEE.toLocaleString()}</strong></div>
+      <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Launch offer</span><strong style="color:var(--success);">First 30 days free</strong></div>
+      <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Commission on jobs</span><strong style="color:var(--success);">0% — you keep all</strong></div>
+      <div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">Billing method</span><strong>Wallet auto-debit</strong></div>
+    </div>
+  </div>
+  ${mech && !trial && status !== 'active' ? `
+  <div class="card" style="text-align:center;border-color:var(--gold);">
+    <div style="font-size:.85rem;font-weight:700;color:var(--gold);margin-bottom:.5rem;">Renew your listing</div>
+    <div style="font-size:.72rem;color:var(--muted);margin-bottom:.85rem;">Pay ₦${MechanicStore.MONTHLY_FEE.toLocaleString()} from your wallet to restore your Fix-it listing.</div>
+    <button class="btn btn-gold" onclick="_mechanicPaySubscription()">Pay ₦${MechanicStore.MONTHLY_FEE.toLocaleString()} & Reactivate</button>
+  </div>` : ''}
+  <div class="card">
+    <div class="card-title">Why Subscription, Not Commission?</div>
+    <div style="font-size:.75rem;line-height:1.7;color:var(--text);">
+      AURAA is your <strong>connection layer</strong>, not your contractor. You set your own prices,
+      agree terms directly with customers, and keep 100% of repair fees. The monthly fee covers
+      visibility in the Fix-it picker, identity verification, and ongoing listing in the vetted network.
+    </div>
+  </div>`;
+}
+
+function _mechanicPaySubscription(){
+  const me = IdentityStore.current();
+  if(!me){ showToast('Sign in first.'); return; }
+  const fee = MechanicStore.MONTHLY_FEE;
+  if(S.riderWallet < fee){ showToast('Top up your wallet to renew.'); return; }
+  S.riderWallet -= fee;
+  localStorage.setItem('auraa_rider_wallet', S.riderWallet);
+  MechanicStore.paySubscription(me.email);
+  logTx({title:'Mechanic subscription · 1 month', amount:fee, type:'debit'});
+  showToast('Listing reactivated. Thank you.');
+  renderMechanicSubscription();
 }
 
 // ═══════════════════════════════════════════════
@@ -4655,7 +5016,9 @@ function journeyRider(me){
     localStorage.removeItem('auraa_proof_trip_status');
     logTx({title:`${jrn.service.name} — ${jrn.destination.label}`, amount:-(fare+jrn.tip), type:'debit'});
 
-    const splits = getSplits(jrn.service.key==='bike'?'bike':(jrn.service.key==='skate'?'skate':'go'), fare);
+    const _me = IdentityStore.current();
+    const _bikeOwnership = _me?.bike_ownership || Onboarding.owners().find(o=>o.email===_me?.email)?.bike_ownership || 'self';
+    const splits = getSplits(jrn.service.key==='bike'?'bike':(jrn.service.key==='skate'?'skate':'go'), fare, {bikeOwnership: _bikeOwnership});
 
     renderStep(`
       <div class="card" style="border-color:var(--success);">
@@ -4782,8 +5145,9 @@ function _journeyOwnerBookAssist(){
   const me = IdentityStore.current();
   const mc = document.getElementById('mainContent');
   const fare = 5800;
-  const splits = getSplits('assist', fare); // Driver 50 / Platform 30 / Owner Loyalty 10 / Ins 5 / Telco 5
-  const loyaltyCredit = splits[2].v; // Owner Loyalty Credit
+  const _bikeOwnership = me?.bike_ownership || Onboarding.owners().find(o=>o.email===me?.email)?.bike_ownership || 'self';
+  const splits = getSplits('assist', fare, {bikeOwnership: _bikeOwnership}); // v11: Driver 50 / Owner 30 / Platform 20 (ctx threaded for consistency; 'assist' split is ownership-agnostic)
+  const ownerShare = splits[1].v; // Vehicle Owner (30%)
 
   mc.innerHTML = `
   ${journeyHeader('owner','Step 2 of 4 · Assist request active','70s')}
@@ -4798,7 +5162,7 @@ function _journeyOwnerBookAssist(){
       🛡️ <strong>Trip-Based Insurance Active</strong> · cover runs trip-start → trip-end
     </div>
     <div class="loyalty-live">
-      <div class="loyalty-live-lbl">Owner Loyalty Credit (10%)</div>
+      <div class="loyalty-live-lbl">Owner Share (30%)</div>
       <div class="loyalty-live-val" id="loyaltyVal">₦0</div>
     </div>
     <div class="progress-bar-wrap" style="margin-top:.75rem;"><div class="progress-bar" id="jOwProg" style="width:0%;"></div></div>
@@ -4811,23 +5175,23 @@ function _journeyOwnerBookAssist(){
     const lv = document.getElementById('loyaltyVal');
     if(pb) pb.style.width = p+'%';
     if(lv){
-      const acc = Math.round(loyaltyCredit * (p/100));
+      const acc = Math.round(ownerShare * (p/100));
       lv.textContent = '₦'+acc.toLocaleString();
       lv.classList.add('pulse');
       setTimeout(()=>lv.classList.remove('pulse'), 200);
     }
     if(p >= 100){
       clearInterval(iv);
-      S.ownerWallet += loyaltyCredit;
+      S.ownerWallet += ownerShare;
       localStorage.setItem('auraa_owner_wallet', S.ownerWallet);
-      logTx({title:`Assist Loyalty Credit`, amount:loyaltyCredit, type:'credit'});
+      logTx({title:`Assist Owner Share (30%)`, amount:ownerShare, type:'credit'});
       mc.innerHTML = `
-      ${journeyHeader('owner','Step 4 of 4 · Trip complete — loyalty credited','done')}
+      ${journeyHeader('owner','Step 4 of 4 · Trip complete — owner share credited','done')}
       <div class="card" style="border-color:var(--success);text-align:center;padding:1.5rem 1rem;">
         <div style="font-size:2.5rem;margin-bottom:.5rem;">🎉</div>
         <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--success);font-size:1.1rem;">Assist Completed</div>
-        <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--gold);font-size:1.8rem;margin:.5rem 0;">+₦${loyaltyCredit.toLocaleString()}</div>
-        <div style="font-size:.72rem;color:var(--muted);margin-bottom:.85rem;">Owner Loyalty Credit (10%) added to your wallet</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--gold);font-size:1.8rem;margin:.5rem 0;">+₦${ownerShare.toLocaleString()}</div>
+        <div style="font-size:.72rem;color:var(--muted);margin-bottom:.85rem;">Owner Share (30%) added to your wallet</div>
         <div class="card-title">Full Split</div>
         ${splits.map(s=>`<div class="split-row"><span class="split-label">${s.l}</span><span class="split-val">₦${s.v.toLocaleString()}</span></div>`).join('')}
         <div style="margin-top:1rem;">
@@ -4858,7 +5222,7 @@ function _deliveryLikeJourney(me, role, fare, from, to){
       <div><span style="color:var(--muted);">To:</span> <strong>${to}</strong></div>
       <div><span style="color:var(--muted);">Fare:</span> <strong style="color:var(--gold);">₦${fare.toLocaleString()}</strong></div>
       <div style="margin-top:.4rem;padding:.5rem;background:rgba(201,168,76,.07);border-radius:8px;font-size:.72rem;">
-        ${role==='bicycler'?'Rider 80% · Platform 20%':'Rider 60% · Bike Owner 30% · Platform 10%'}
+        ${role==='bicycler'?'Cyclist 80% · Platform 20%':'Biker 80% · Platform 20%'}
       </div>
     </div>
     <div style="margin-top:.85rem;">
@@ -5061,7 +5425,7 @@ function renderAdminDash(){
   <div class="traction-live">
     <div class="traction-live-head">
       <div class="traction-live-title"><span class="traction-live-dot"></span>Founding User Campaign — LIVE</div>
-      <span class="badge badge-gold" style="font-size:.6rem;">v10.7</span>
+      <span class="badge badge-gold" style="font-size:.6rem;">v11</span>
     </div>
     <div class="traction-live-grid">
       <div class="traction-live-cell">
@@ -5081,12 +5445,13 @@ function renderAdminDash(){
         <div class="traction-live-lbl">Journeys Completed</div>
       </div>
     </div>
-    <div style="margin-top:.6rem;font-size:.68rem;color:var(--muted);display:grid;grid-template-columns:repeat(5,1fr);gap:.3rem;text-align:center;">
+    <div style="margin-top:.6rem;font-size:.68rem;color:var(--muted);display:grid;grid-template-columns:repeat(6,1fr);gap:.3rem;text-align:center;">
       <div><strong style="color:var(--gold);">${fuCaps.rider||0}</strong>/${FU.CAPS.rider}<div style="font-size:.55rem;">Riders</div></div>
       <div><strong style="color:var(--gold);">${fuCaps.driver||0}</strong>/${FU.CAPS.driver}<div style="font-size:.55rem;">Drivers</div></div>
       <div><strong style="color:var(--gold);">${fuCaps.owner||0}</strong>/${FU.CAPS.owner}<div style="font-size:.55rem;">Owners</div></div>
       <div><strong style="color:var(--gold);">${fuCaps.biker||0}</strong>/${FU.CAPS.biker}<div style="font-size:.55rem;">Bikers</div></div>
       <div><strong style="color:var(--gold);">${fuCaps.bicycler||0}</strong>/${FU.CAPS.bicycler}<div style="font-size:.55rem;">Bicyclers</div></div>
+      <div><strong style="color:var(--gold);">${fuCaps.mechanic||0}</strong>/${FU.CAPS.mechanic}<div style="font-size:.55rem;">Mechanics</div></div>
     </div>
   </div>
   <div class="stats-grid">
@@ -5571,7 +5936,7 @@ function updateTicker(){
   const fuTotal = FU.totalFoundingUsers();
   const pledges = FU.pledgesOn();
   document.getElementById('tickerInner').textContent=
-    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v10.7 Complete  •  VC Raise: $200K SAFE  •  HNI Pool: ₦85M • 4 Slots  •  AWS Amplify eu-west-2  `;
+    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v11 Complete  •  VC Raise: $200K SAFE  •  HNI Pool: ₦85M • 4 Slots  •  AWS Amplify eu-west-2  `;
 }
 
 // ═══════════════════════════════════════════════
@@ -5607,7 +5972,7 @@ let hniSlotsLeft=2; // simulate urgency — 2 of 4 slots remaining
 const vcSlides=[
   // ── 1. COVER ──────────────────────────────────────────────
   {title:'AURAA',body:`<div style="text-align:center;padding:.5rem 0;">
-    <div style="font-size:.95rem;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:.75rem;">Assured Urban Ride Assistance</div>
+    <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.9rem;">Coordinated mobility infrastructure for emerging-market megacities.<br/>Launching Lagos 2026, architected for cross-border scale.</div>
     <div style="font-size:1.6rem;font-weight:800;color:var(--text);line-height:1.3;margin-bottom:.5rem;">Be Safe.<br/>Be Unstoppable.</div>
     <div style="font-size:.85rem;color:var(--gold);font-style:italic;margin-top:.5rem;">Relax, we've got this.</div>
     <div style="margin-top:1.25rem;font-size:.72rem;color:var(--muted);">CAC Reg. No. 9058278 • Lagos, Nigeria • Pre-Seed Round 2026</div>
@@ -5641,7 +6006,7 @@ const vcSlides=[
   {title:'AURAA Assist — The Global Exclusive',body:`<strong>This is where AURAA becomes different.</strong><br/><br/>AURAA Assist allows a vehicle owner to request a vetted driver to come and operate <em>their own car.</em><br/><br/>✅ No loss of control<br/>✅ No asset risk<br/>✅ Fully owner-authorized<br/>✅ Live tracking throughout<br/><br/>Use cases: Night out returns, medical trips, early morning flights, corporate errands, elderly support.<br/><br/><strong>This is not ride-hailing.<br/>This is controlled mobility.</strong><br/><br/><em style="color:var(--gold);">No other platform offers this globally.</em>`,metric:'Global Exclusive',metricLabel:'No comparable product exists anywhere in the world'},
 
   // ── 7. BEYOND RIDES: FIX-IT ────────────────────────────────
-  {title:'Beyond Rides: The AURAA Support Layer',body:`Mobility doesn't end at movement. Vehicles break down. Drivers and owners need support in real time.<br/><br/><strong>AURAA Fix-it</strong> connects drivers and owners instantly to nearby vetted mechanics.<br/><br/>🔧 No AURAA operational involvement<br/>🔧 No pricing control or negotiation<br/>🔧 Pure connection layer — AURAA facilitates, mechanics execute<br/><br/>Mechanics pay for visibility and priority listing — a monetisation layer that adds revenue without adding operational complexity.<br/><br/><em style="color:var(--gold);">"AURAA doesn't just move vehicles — it supports them."</em>`},
+  {title:'Beyond Rides: The AURAA Support Layer',body:`Mobility doesn't end at movement. Vehicles break down. Drivers and owners need support in real time.<br/><br/><strong>AURAA Fix-it</strong> connects drivers and owners instantly to nearby vetted mechanics.<br/><br/>🔧 <strong>₦5,000/month mechanic listing fee</strong><br/>🔧 <strong>First month free</strong> — zero-friction launch<br/>🔧 <strong>0% job commission</strong> — AURAA stays out of the warranty &amp; liability chain<br/><br/>Mechanics pay for visibility, not per-job. Pure connection layer — we facilitate, they execute.<br/><br/><strong style="color:var(--gold);">Revenue model:</strong><br/>• 200 Lagos mechanics → <strong>₦12M/year ARR</strong><br/>• 1,000 mechanics nationwide → <strong>₦60M/year ARR</strong><br/><br/>Subscription revenue that adds a recurring line without adding operational complexity or legal exposure.<br/><br/><em style="color:var(--gold);">"AURAA doesn't just move vehicles — it supports them."</em>`},
 
   // ── 8. WHY NOW ─────────────────────────────────────────────
   {title:'Why Now?',body:`• Urban congestion across African cities is accelerating<br/>• Vehicle ownership is rising — more cars, less trust in how they're managed<br/>• Gig economy maturity means driver supply exists; structure is missing<br/>• Trust in shared mobility is declining<br/>• Millions of vehicles remain underutilised daily<br/>• Insurance underwriting interest, Flutterwave, and Airtel Nigeria partnerships confirm infrastructure is ready<br/><br/><strong style="color:var(--gold);">The system is broken. AURAA rebuilds it around control and trust.</strong><br/><br/>247 verified drivers. MVP live. Capital is the only missing piece.`},
@@ -5684,7 +6049,8 @@ const vcSlides=[
 🚗 Drivers + 🛼 Skaters: <strong>${(caps.driver||0).toLocaleString()}</strong> / ${FU.CAPS.driver.toLocaleString()}<br/>
 🏷️ Owners (car+bike): <strong>${(caps.owner||0).toLocaleString()}</strong> / ${FU.CAPS.owner.toLocaleString()}<br/>
 🏍️ Bike Riders: <strong>${(caps.biker||0).toLocaleString()}</strong> / ${FU.CAPS.biker.toLocaleString()}<br/>
-🚲 Bicycle Riders: <strong>${(caps.bicycler||0).toLocaleString()}</strong> / ${FU.CAPS.bicycler.toLocaleString()}<br/><br/>
+🚲 Bicycle Riders: <strong>${(caps.bicycler||0).toLocaleString()}</strong> / ${FU.CAPS.bicycler.toLocaleString()}<br/>
+🔧 Mechanics: <strong>${(caps.mechanic||0).toLocaleString()}</strong> / ${FU.CAPS.mechanic.toLocaleString()}<br/><br/>
 <em style="color:var(--gold);">Multi-role registration: same email can register across multiple roles. Each adds to that role's counter.</em>`;
   })()},
 
