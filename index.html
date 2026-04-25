@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v11.1.1</title>
+<title>AURAA Technologies — MVP v11.2.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<!-- v11.2.0 — Supabase JS client (founding_users durable writes) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --green: #0a5c36;
@@ -640,6 +642,27 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
   margin-top:2.4rem;padding:.55rem 1.4rem;border:1px solid rgba(201,168,76,.4);border-radius:999px;
   opacity:0;animation:s2FadeIn .6s ease 2.2s forwards, s2TapPulse 2.4s ease-in-out 2.8s infinite;
 }
+/* v11.2.0 — Founding User live counter on splash */
+#splash.s2 .s2-fu-counter{
+  display:flex;flex-direction:column;align-items:center;gap:.25rem;
+  margin-top:1.4rem;padding:.55rem 1.1rem;
+  border:1px solid rgba(201,168,76,.18);border-radius:8px;
+  background:rgba(201,168,76,.04);
+  opacity:0;animation:s2FadeIn .8s ease 2s forwards;
+}
+#splash.s2 .s2-fu-num{
+  font-family:'Syne',sans-serif;font-size:1.45rem;font-weight:800;
+  color:var(--gold);letter-spacing:.04em;line-height:1;
+}
+#splash.s2 .s2-fu-num.live::before{
+  content:'';display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--success);margin-right:.5rem;vertical-align:middle;
+  box-shadow:0 0 8px var(--success);
+}
+#splash.s2 .s2-fu-label{
+  font-size:.6rem;color:rgba(255,255,255,.55);
+  text-transform:uppercase;letter-spacing:.2em;
+}
 @keyframes s2MarkIn{
   0%{opacity:0;transform:scale(.78);}
   60%{opacity:1;}
@@ -854,6 +877,10 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
     <div class="s2-tag">Relax. We&#39;ve got this!</div>
     <div class="s2-position">Coordinated mobility infrastructure for emerging-market megacities.<br/>Launching Lagos 2026 — architected for cross-border scale.</div>
     <div class="s2-reg">AURAA Technologies Limited &nbsp;·&nbsp; RC 9058278</div>
+    <div class="s2-fu-counter" id="splashFuCounter">
+      <span class="s2-fu-num" id="splashFuCounterNum">—</span>
+      <span class="s2-fu-label">Founding Users registered</span>
+    </div>
     <div class="s2-tap">Tap to Enter</div>
   </div>
 </div>
@@ -1198,6 +1225,288 @@ const IdentityStore = {
     return null;
   },
 };
+
+// ═══════════════════════════════════════════════
+// SUPABASE INTEGRATION — v11.2.0
+//
+// Strategy: localStorage stays the local-instant source of truth (preserves
+// offline behaviour + the FU# reveal animation). Supabase is the durable
+// record. Writes from finishRegistration() are fire-and-forget. Failures
+// queue to localStorage and replay on the next 'online' event or page load.
+//
+// Schema target (founding_users):
+//   id BIGSERIAL PK · fu_number INT UNIQUE NOT NULL · name TEXT NOT NULL
+//   email TEXT UNIQUE NOT NULL · phone TEXT · role TEXT NOT NULL · org TEXT
+//   pledge_on BOOL · pledge_pct INT · referrer TEXT · created_at TIMESTAMPTZ
+//
+// RLS: anyone_can_register (INSERT) + anyone_can_read (SELECT) for anon role.
+// ═══════════════════════════════════════════════
+const SupabaseSync = (function(){
+  const URL = 'https://yroffdxgkppmqngybboj.supabase.co';
+  const KEY = 'sb_publishable_OcRlo6xhsrvzSWCG5dGkoA_AYqt-fdh';
+  const TABLE = 'founding_users';
+  const QUEUE_KEY = 'auraa_supabase_retry_queue';
+  const STATUS_KEY = 'auraa_supabase_last_status';
+
+  let _client = null;
+  let _ready = false;
+
+  function _initClient(){
+    if(_client) return _client;
+    if(typeof window.supabase === 'undefined' || !window.supabase.createClient){
+      // supabase-js hasn't loaded yet from CDN
+      return null;
+    }
+    try {
+      _client = window.supabase.createClient(URL, KEY);
+      _ready = true;
+      return _client;
+    } catch(e){
+      console.warn('[SupabaseSync] createClient failed:', e);
+      return null;
+    }
+  }
+
+  function _setStatus(state, detail){
+    try {
+      localStorage.setItem(STATUS_KEY, JSON.stringify({
+        state, detail: detail||'', at: new Date().toISOString()
+      }));
+    } catch(e){}
+  }
+
+  function _enqueue(record, reason){
+    try {
+      const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+      queue.push({ record, queuedAt: new Date().toISOString(), reason: reason||'' });
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    } catch(e){
+      console.error('[SupabaseSync] enqueue failed:', e);
+    }
+  }
+
+  function _drainQueue(){
+    try {
+      const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+      localStorage.setItem(QUEUE_KEY, '[]');
+      return queue;
+    } catch(e){
+      return [];
+    }
+  }
+
+  // Build the row for founding_users from an MVP identity object
+  function _buildRow(identity){
+    const pledge = (typeof FU !== 'undefined') ? FU.getPledge(identity.email) : null;
+    return {
+      fu_number: identity.fuSeq || null,
+      name: identity.name || '',
+      email: (identity.email||'').toLowerCase(),
+      phone: identity.phone || null,
+      role: identity.role || null,
+      org: null,
+      pledge_on: !!(pledge && pledge.on),
+      pledge_pct: (pledge && pledge.on) ? (pledge.pct || null) : null,
+      referrer: null,
+    };
+  }
+
+  async function registerFoundingUser(identity){
+    if(!identity || !identity.email){
+      return { ok:false, reason:'missing-identity' };
+    }
+    const row = _buildRow(identity);
+
+    // Offline short-circuit
+    if(typeof navigator !== 'undefined' && navigator.onLine === false){
+      _enqueue(row, 'offline');
+      _setStatus('queued-offline', 'FU#'+row.fu_number);
+      return { ok:false, queued:true, reason:'offline' };
+    }
+
+    const client = _initClient();
+    if(!client){
+      _enqueue(row, 'client-not-ready');
+      _setStatus('queued-no-client', 'FU#'+row.fu_number);
+      return { ok:false, queued:true, reason:'client-not-ready' };
+    }
+
+    try {
+      const { data, error } = await client.from(TABLE).insert(row).select();
+      if(error){
+        // 23505 = unique violation. Email already in DB = effective success.
+        if(error.code === '23505'){
+          _setStatus('duplicate', row.email+' already in DB');
+          return { ok:true, duplicate:true };
+        }
+        _enqueue(row, 'error: '+(error.message||error.code||'unknown'));
+        _setStatus('queued-error', error.message||error.code||'unknown');
+        return { ok:false, queued:true, error };
+      }
+      _setStatus('ok', 'FU#'+row.fu_number+' written');
+      // Refresh splash counter if it's mounted
+      _hydrateSplashCounter();
+      return { ok:true, data };
+    } catch(e){
+      _enqueue(row, 'exception: '+(e.message||'unknown'));
+      _setStatus('queued-exception', e.message||'unknown');
+      return { ok:false, queued:true, error:e };
+    }
+  }
+
+  async function getFoundingUserCount(){
+    const client = _initClient();
+    if(!client) return null;
+    try {
+      const { count, error } = await client.from(TABLE)
+        .select('*', { count:'exact', head:true });
+      if(error){
+        console.warn('[SupabaseSync] count error:', error);
+        return null;
+      }
+      return count;
+    } catch(e){
+      console.warn('[SupabaseSync] count exception:', e);
+      return null;
+    }
+  }
+
+  async function _hydrateSplashCounter(){
+    const numEl = document.getElementById('splashFuCounterNum');
+    if(!numEl) return;
+    // 1. Show local count instantly so there's no flash of "—"
+    if(typeof FU !== 'undefined'){
+      const local = FU.totalFoundingUsers();
+      if(local > 0) numEl.textContent = local.toLocaleString();
+    }
+    // 2. Upgrade to live Supabase count when it resolves
+    const count = await getFoundingUserCount();
+    if(count !== null && count !== undefined){
+      numEl.textContent = count.toLocaleString();
+      numEl.classList.add('live');
+    }
+  }
+
+  async function replayQueue(){
+    const queue = _drainQueue();
+    if(!queue.length) return { replayed:0, failed:0 };
+    const client = _initClient();
+    if(!client){
+      // Re-enqueue everything if client isn't ready yet
+      queue.forEach(item => _enqueue(item.record, 'replay-no-client'));
+      return { replayed:0, failed:queue.length };
+    }
+    let ok = 0, failed = 0;
+    for(const item of queue){
+      try {
+        const { error } = await client.from(TABLE).insert(item.record);
+        if(error && error.code !== '23505'){
+          _enqueue(item.record, 'replay-failed: '+(error.message||error.code));
+          failed++;
+        } else {
+          ok++;
+        }
+      } catch(e){
+        _enqueue(item.record, 'replay-exception: '+(e.message||'unknown'));
+        failed++;
+      }
+    }
+    _setStatus('replay-done', 'ok='+ok+' failed='+failed);
+    if(ok > 0) _hydrateSplashCounter();
+    return { replayed:ok, failed };
+  }
+
+  function status(){
+    try { return JSON.parse(localStorage.getItem(STATUS_KEY) || 'null'); }
+    catch(e){ return null; }
+  }
+
+  function queueLength(){
+    try { return (JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]')).length; }
+    catch(e){ return 0; }
+  }
+
+  function boot(){
+    // supabase-js may still be loading from CDN. Try now, retry once.
+    if(!_initClient()){
+      setTimeout(() => {
+        if(_initClient()){
+          replayQueue();
+          _hydrateSplashCounter();
+        } else {
+          console.warn('[SupabaseSync] supabase-js failed to load — running localStorage-only');
+          _hydrateSplashCounter(); // still show local count
+        }
+      }, 600);
+    } else {
+      replayQueue();
+      _hydrateSplashCounter();
+    }
+
+    // Drain the queue when the network comes back
+    window.addEventListener('online', () => {
+      console.log('[SupabaseSync] back online — replaying queue');
+      replayQueue();
+    });
+
+    // Console helpers — Mayowa's checkpoint (a) tools
+    window.__AURAA_supabaseTest = async function(){
+      const c = _initClient();
+      if(!c){ console.error('[__AURAA_supabaseTest] client not ready'); return null; }
+      const testRow = {
+        fu_number: 999000 + Math.floor(Math.random()*999),
+        name: 'Console Test '+new Date().toISOString().slice(11,19),
+        email: 'console-test-'+Date.now()+'@auraa.test',
+        phone: null, role: 'rider', org: null,
+        pledge_on: false, pledge_pct: null, referrer: 'console',
+      };
+      console.log('[__AURAA_supabaseTest] inserting:', testRow);
+      const { data, error } = await c.from(TABLE).insert(testRow).select();
+      if(error){ console.error('[__AURAA_supabaseTest] error:', error); return error; }
+      console.log('[__AURAA_supabaseTest] ✅ success — check Supabase dashboard:', data);
+      return data;
+    };
+
+    window.__AURAA_supabaseCount = async function(){
+      const n = await getFoundingUserCount();
+      console.log('[__AURAA_supabaseCount] total rows in founding_users:', n);
+      return n;
+    };
+
+    window.__AURAA_supabaseStatus = function(){
+      const s = status();
+      const q = queueLength();
+      console.log('[__AURAA_supabaseStatus]', { lastStatus:s, queueLength:q });
+      return { lastStatus:s, queueLength:q };
+    };
+
+    window.__AURAA_supabaseReplay = replayQueue;
+
+    console.log('%c[SupabaseSync] v11.2.0 booted','color:#c9a84c;font-weight:bold;');
+    console.log('Console helpers available:');
+    console.log('  __AURAA_supabaseTest()    — POST a test row');
+    console.log('  __AURAA_supabaseCount()   — GET row count');
+    console.log('  __AURAA_supabaseStatus()  — show last status + queue');
+    console.log('  __AURAA_supabaseReplay()  — drain the retry queue');
+  }
+
+  return {
+    boot,
+    registerFoundingUser,
+    getFoundingUserCount,
+    replayQueue,
+    status,
+    queueLength,
+    _hydrateSplashCounter,
+  };
+})();
+
+// Boot once the DOM is ready (boot is idempotent + safe to call early)
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', () => SupabaseSync.boot());
+} else {
+  SupabaseSync.boot();
+}
 
 // Role metadata — single source of truth
 const ROLES = {
@@ -2480,6 +2789,26 @@ function requireIdentity(purpose, opts){
         // Even for add-role, save the role-specific answer
         FU.saveSurvey(identity.email, null, state.q_role, state.role);
       }
+
+      // ═══ v11.2.0 — Supabase durable write ═══
+      // Fire-and-forget. Only on first registration of an email — the
+      // founding_users table has email UNIQUE, so role additions stay
+      // localStorage-only (multi-role per email is local-truth for MVP).
+      // Failures queue to localStorage and replay on next online event.
+      if(!existing){
+        SupabaseSync.registerFoundingUser(identity).then(result => {
+          if(result.ok && !result.duplicate){
+            console.log('[FU registration] synced to Supabase: '+identity.email);
+          } else if(result.ok && result.duplicate){
+            console.log('[FU registration] already in Supabase: '+identity.email);
+          } else if(result.queued){
+            console.warn('[FU registration] queued for retry — reason: '+result.reason);
+          }
+        }).catch(err => {
+          console.error('[FU registration] unexpected sync error:', err);
+        });
+      }
+      // ═════════════════════════════════════════
 
       logEvent({
         action: existing ? 'Founding User Added Role' : 'Founding User Registered',
@@ -6375,7 +6704,7 @@ function updateTicker(){
   const fuTotal = FU.totalFoundingUsers();
   const pledges = FU.pledgesOn();
   document.getElementById('tickerInner').textContent=
-    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v11.1.1  •  VC Raise: $200K SAFE  •  AWS Amplify eu-west-2  `;
+    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v11.2.0  •  VC Raise: $200K SAFE  •  Netlify (auraahq.netlify.app)  `;
 }
 
 // ═══════════════════════════════════════════════
@@ -6450,7 +6779,7 @@ const vcSlides=[
   {title:'Why Now?',body:`• Urban congestion across African cities is accelerating<br/>• Vehicle ownership is rising — more cars, less trust in how they're managed<br/>• Gig economy maturity means driver supply exists; structure is missing<br/>• Trust in shared mobility is declining<br/>• Millions of vehicles remain underutilised daily<br/>• Insurance underwriting interest, Flutterwave, and Airtel Nigeria partnerships confirm infrastructure is ready<br/><br/><strong style="color:var(--gold);">The system is broken. AURAA rebuilds it around control and trust.</strong><br/><br/>247 verified drivers. MVP live. Capital is the only missing piece.`},
 
   // ── 9. PRODUCT / LIVE MVP ──────────────────────────────────
-  {title:'Product — Live MVP',body:`We have built a working MVP that demonstrates:<br/><br/>✅ Rider, Driver, Owner, and Admin flows<br/>✅ Full trip lifecycle — booking → acceptance → completion<br/>✅ Wallet and earnings system per role<br/>✅ Owner-activated ASSIST request with driver selection<br/>✅ Fix-it mechanic connection layer<br/>✅ NDA-gated investor deck with lead capture<br/>✅ Admin activity tracking dashboard<br/><br/><strong>Live demo:</strong><br/><a href="https://production.dsgbnsri5bcqf.amplifyapp.com" style="color:var(--gold);word-break:break-all;">production.dsgbnsri5bcqf.amplifyapp.com</a><br/><br/><em style="font-size:.75rem;color:var(--muted);">This is not a mockup. Every screen is functional.</em>`},
+  {title:'Product — Live MVP',body:`We have built a working MVP that demonstrates:<br/><br/>✅ Rider, Driver, Owner, and Admin flows<br/>✅ Full trip lifecycle — booking → acceptance → completion<br/>✅ Wallet and earnings system per role<br/>✅ Owner-activated ASSIST request with driver selection<br/>✅ Fix-it mechanic connection layer<br/>✅ NDA-gated investor deck with lead capture<br/>✅ Admin activity tracking dashboard<br/><br/><strong>Live demo:</strong><br/><a href="https://auraahq.netlify.app" style="color:var(--gold);word-break:break-all;">auraahq.netlify.app</a><br/><br/><em style="font-size:.75rem;color:var(--muted);">This is not a mockup. Every screen is functional.</em>`},
 
   // ── 10. TRUST & SAFETY ─────────────────────────────────────
   {title:'Trust &amp; Safety Layer',body:`<strong>Every trip is protected end-to-end.</strong><br/><br/>🔐 <strong>Driver Verification</strong><br/>CAC identity check + Airtel Nigeria M2M SIM biometric confirmation + community referral<br/><br/>🛡️ <strong>Trip-Based Insurance</strong><br/>Every Go and Assist trip is insured by our underwriting partner. Cover begins at trip start, ends at trip termination. Visible on every trip receipt. Partner name protected until signature.<br/><br/>📋 <strong>Trip Logging</strong><br/>Every trip timestamped, route-recorded, and stored for claims, audits, and disputes<br/><br/>🚨 <strong>Emergency Escalation</strong><br/>In-app distress signal → notifies AURAA operations + owner + emergency contact<br/><br/><strong>Trust is not a feature. It is the infrastructure.</strong>`},
@@ -6462,7 +6791,7 @@ const vcSlides=[
   {title:'Unit Economics',body:`<strong>Sample AURAA Assist Trip — ₦3,800</strong><br/><br/>Driver: ₦2,660 (70%)<br/>Owner Rebate: ₦380 (10%)<br/>Platform: ₦380 (10%)<br/>Insurance: ₦190 (5%)<br/>Telco: ₦190 (5%)<br/><br/><strong>Platform net per trip: ₦380 minimum</strong><br/>At 500 trips/day → ₦190,000 platform revenue/day<br/>At 10,000 trips/day → ₦3.8M platform revenue/day<br/><br/><em style="color:var(--gold);">Assist generates 2× the owner loyalty of standard ride-hailing.</em>`},
 
   // ── 13. TRACTION ───────────────────────────────────────────
-  {title:'Traction',body:`✅ Fully functional MVP deployed on AWS Amplify<br/>✅ Multi-role testing — riders, drivers, owners, admin<br/>✅ Real usage flows completed across all 5 services<br/>✅ Insurance underwriting partner — interest confirmed, signature in progress<br/>✅ Flutterwave — payment rail onboarded<br/>✅ Airtel Nigeria — M2M SIM discussions active<br/>✅ CAC registered December 2025<br/>✅ 247 verified standby drivers ready to launch<br/>✅ BKR Capital, Madica, Pi Network Ventures, Future Africa — submitted<br/><br/>Early feedback is focused on trust, insurance, and control.<br/><strong style="color:var(--gold);">Users are not confused. They are asking real operational questions.</strong>`},
+  {title:'Traction',body:`✅ Fully functional MVP deployed on Netlify<br/>✅ Multi-role testing — riders, drivers, owners, admin<br/>✅ Real usage flows completed across all 5 services<br/>✅ Insurance underwriting partner — interest confirmed, signature in progress<br/>✅ Flutterwave — payment rail onboarded<br/>✅ Airtel Nigeria — M2M SIM discussions active<br/>✅ CAC registered December 2025<br/>✅ 247 verified standby drivers ready to launch<br/>✅ BKR Capital, Madica, Pi Network Ventures, Future Africa — submitted<br/><br/>Early feedback is focused on trust, insurance, and control.<br/><strong style="color:var(--gold);">Users are not confused. They are asking real operational questions.</strong>`},
 
   // ── 13b. FOUNDING USER CAMPAIGN (LIVE) ─────────────────────
   {title:'Founding User Campaign — Live Numbers',body:(()=>{
@@ -6517,7 +6846,7 @@ Phase 3: Global urban markets with high vehicle ownership gaps`},
   {title:'Why We Win',  body:`<strong>"What stops Uber from copying this?"</strong><br/><br/>🔒 <strong>Assist logistics complexity</strong> — dispatching a driver to operate someone else's personal vehicle requires identity verification, insurance underwriting, owner consent logic, and vehicle matching. Uber's architecture is built for driver-owned vehicles only.<br/><br/>🤝 <strong>Owner-driver relationship layer</strong> — Uber has zero vehicle owner incentive. Our owners earn 25% passively. That loyalty is structural.<br/><br/>🌍 <strong>Cultural moat</strong> — AURAA is built for how Nigerians actually live. Uber doesn't understand this context. We live in it.<br/><br/>⚡ <strong>Community supply</strong> — 247 verified drivers from a real social network, assembled before funding. That cannot be replicated with a marketing budget.`},
 
   // ── 17. STRATEGIC PARTNERS ─────────────────────────────────
-  {title:'Strategic Partners',body:`🛡️ <strong>Insurance Underwriter</strong> — Trip-based cover (interest confirmed, partner name protected until signature)<br/>💳 <strong>Flutterwave</strong> — Payment escrow &amp; settlement (onboarded)<br/>📡 <strong>Airtel Nigeria</strong> — M2M SIM verification (engaged)<br/>☁️ <strong>AWS Amplify</strong> — Hosting &amp; deployment (live)<br/>🔗 <strong>Pi Network</strong> — Wallet integration (pipeline)<br/><br/><em style="font-size:.75rem;color:var(--muted);">Partnerships confirmed before a single dollar raised. This is what execution looks like.</em>`},
+  {title:'Strategic Partners',body:`🛡️ <strong>Insurance Underwriter</strong> — Trip-based cover (interest confirmed, partner name protected until signature)<br/>💳 <strong>Flutterwave</strong> — Payment escrow &amp; settlement (onboarded)<br/>📡 <strong>Airtel Nigeria</strong> — M2M SIM verification (engaged)<br/>☁️ <strong>Netlify</strong> — Hosting &amp; deployment (live)<br/>🔗 <strong>Pi Network</strong> — Wallet integration (pipeline)<br/><br/><em style="font-size:.75rem;color:var(--muted);">Partnerships confirmed before a single dollar raised. This is what execution looks like.</em>`},
 
   // ── 17. THE RAISE ──────────────────────────────────────────
   {title:'The Raise',body:`<strong>$200,000 USD — Pre-Seed SAFE Note</strong><br/><br/>Valuation Cap: ₦1.2B–₦1.5B<br/>Instrument: SAFE (Simple Agreement for Future Equity)<br/>No immediate board seat at this stage<br/>Converts at next priced round (Series A)<br/><br/><strong>Use of funds:</strong><br/>• Engineering &amp; Mobile Apps: 40%<br/>• Driver Acquisition &amp; Onboarding: 25%<br/>• Insurance &amp; Telco Integration: 20%<br/>• Marketing &amp; Growth: 10%<br/>• Legal &amp; Operations: 5%<br/><br/><em style="color:var(--gold);">Pre-seed capital priced into the Series A round structure — direct entry at the foundation level.</em>`,metric:'$200,000',metricLabel:'Pre-Seed SAFE · Valuation Cap ₦1.2B–₦1.5B'},
@@ -6544,7 +6873,7 @@ const hniSlides=[
   {title:'What AURAA Does',body:`<strong>AURAA is a mobility operating system.</strong><br/><br/>Three services no single platform offers today:<br/>🚗 Driver dispatch for your own vehicle (ASSIST — globally exclusive)<br/>🚗 Standard ride-hailing (GO)<br/>🔧 Roadside assistance (FIX-IT)<br/><br/>One platform. One wallet. Owners earn passively while their car works.`},
   {title:'Why This Is Different',body:`AURAA ASSIST — a professional driver dispatched to operate <em>your own vehicle</em> — does not exist anywhere else in the world.<br/><br/>This is not an improvement on Uber. This is a new category.<br/><br/>First-mover advantage in a market of 22 million people in Lagos alone.`},
   {title:'The Vehicle Owner Angle',body:`<strong>Your car becomes an income-generating asset.</strong><br/><br/>AURAA GO: Owner earns 25% of every fare<br/>AURAA ASSIST: Owner earns 5% rebate on every trip<br/><br/>Deploy your vehicle. Monitor it live. Withdraw earnings.<br/><br/>This is passive income infrastructure — not just an app.`},
-  {title:'Traction Right Now',body:`✅ 247 verified drivers — ready to launch<br/>✅ MVP live at production.dsgbnsri5bcqf.amplifyapp.com<br/>✅ Insurance underwriting partner — interest confirmed, signature in progress<br/>✅ Flutterwave — payment rail onboarded<br/>✅ CAC registered Dec 2025<br/><br/><strong>This is not a concept. This is a business ready to scale.</strong>`},
+  {title:'Traction Right Now',body:`✅ 247 verified drivers — ready to launch<br/>✅ MVP live at auraahq.netlify.app<br/>✅ Insurance underwriting partner — interest confirmed, signature in progress<br/>✅ Flutterwave — payment rail onboarded<br/>✅ CAC registered Dec 2025<br/><br/><strong>This is not a concept. This is a business ready to scale.</strong>`},
   {title:'Why Lagos — And Why It Matters Globally',body:`<div style="margin-bottom:.75rem;font-size:.78rem;color:var(--gold);font-weight:700;letter-spacing:.08em;">MARKET STRATEGY</div>
 <strong style="color:var(--text);">Lagos is not a risk factor. It is a proof factory.</strong><br/><br/>
 <div style="margin:.65rem 0;">
