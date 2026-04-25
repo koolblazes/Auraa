@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v11.1</title>
+<title>AURAA Technologies — MVP v11.1.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root {
@@ -732,7 +732,7 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
 .r2-investor-text{display:flex;flex-direction:column;gap:.1rem;}
 .r2-investor-name{font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;color:var(--gold);letter-spacing:.02em;}
 .r2-investor-desc{font-family:'DM Sans',sans-serif;font-size:.66rem;color:var(--muted);letter-spacing:.04em;}
-.r2-investor-btns{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;}
+.r2-investor-btns{display:grid;grid-template-columns:1fr;gap:.5rem;}
 .r2-investor-btn{
   font-family:'Syne',sans-serif;font-weight:700;font-size:.72rem;letter-spacing:.06em;
   padding:.55rem .6rem;border-radius:10px;cursor:pointer;border:1px solid var(--border);
@@ -961,12 +961,11 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
         </div>
         <div class="r2-investor-text">
           <div class="r2-investor-name">Investor Access</div>
-          <div class="r2-investor-desc">Pre-Seed &nbsp;·&nbsp; NDA Protected</div>
+          <div class="r2-investor-desc">Pre-Seed Round &nbsp;·&nbsp; Qualified Investors</div>
         </div>
       </div>
       <div class="r2-investor-btns">
-        <button class="r2-investor-btn solid" onclick="openInvestorDeck('vc')">VC Deck</button>
-        <button class="r2-investor-btn" onclick="openInvestorDeck('hni')">HNI Deck</button>
+        <button class="r2-investor-btn solid" onclick="openInvestorDeck('vc')">Open VC Deck →</button>
       </div>
     </div>
   </div>
@@ -2670,15 +2669,7 @@ function requireInvestorIdentity(){
         </div>
 
         <div id="igInvNew">
-          <div class="ig-label">Investor type</div>
-          <div class="ig-roles" style="grid-template-columns:repeat(2,1fr);">
-            <button class="ig-role selected" data-itype="vc">
-              <span class="ig-role-emoji">🏛️</span>VC / Fund
-            </button>
-            <button class="ig-role" data-itype="hni">
-              <span class="ig-role-emoji">👑</span>HNI / Angel
-            </button>
-          </div>
+          <input type="hidden" data-itype="vc" id="iiHiddenType"/>
 
           <div id="iiTerms" class="ig-code-box" style="border-style:solid;margin-top:.2rem;">
             <div class="ig-code-label" id="iiTermsLabel">VC · Pre-Seed SAFE</div>
@@ -2731,14 +2722,6 @@ function requireInvestorIdentity(){
         termsHint.textContent = 'Fixed pre-seed SAFE ticket. Valuation cap ₦1.2B–₦1.5B. Converts at Series A.';
         saveBtn.disabled = false;
         saveBtn.textContent = 'Generate my code →';
-      } else {
-        termsLabel.textContent = `HNI Founding Partner · ${hniRemaining} of 4 slots available`;
-        termsVal.textContent = '₦21,250,000';
-        termsHint.innerHTML = hniRemaining > 0
-          ? 'One slot = 1.25% equity. Total pool: ₦85M for 5% equity across 4 founding partners. Direct equity participation.'
-          : '<strong style="color:var(--gold);">All 4 slots are reserved.</strong> You can still register — Mayowa will reach out if any slot opens.';
-        saveBtn.disabled = false;
-        saveBtn.textContent = hniRemaining > 0 ? 'Generate my code →' : 'Join the waitlist →';
       }
     };
     updateTerms();
@@ -2775,13 +2758,13 @@ function requireInvestorIdentity(){
         role: 'investor',
         type: 'investor',
         investorType: itype, // 'vc' or 'hni'
-        ticket: itype === 'vc' ? '$200K SAFE' : '₦21.25M slot',
-        waitlist: itype === 'hni' && hniRemaining === 0,
+        ticket: '$200K SAFE',
+        waitlist: false,
         registeredAt: new Date().toLocaleString(),
       };
       identity.code = IdentityStore.generateCode(identity);
       IdentityStore.save(identity);
-      IdentityStore.addTag(email, itype === 'hni' ? 'hni-prospect' : 'vc-prospect');
+      IdentityStore.addTag(email, 'vc-prospect');
       if(identity.waitlist) IdentityStore.addTag(email, 'hni-waitlist');
       logEvent({
         action: 'Investor Registered',
@@ -6392,7 +6375,7 @@ function updateTicker(){
   const fuTotal = FU.totalFoundingUsers();
   const pledges = FU.pledgesOn();
   document.getElementById('tickerInner').textContent=
-    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v11 Complete  •  VC Raise: $200K SAFE  •  HNI Pool: ₦85M • 4 Slots  •  AWS Amplify eu-west-2  `;
+    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v11.1.1  •  VC Raise: $200K SAFE  •  AWS Amplify eu-west-2  `;
 }
 
 // ═══════════════════════════════════════════════
@@ -6404,17 +6387,16 @@ function renderInvestorTab(){
   <div class="card" style="text-align:center;padding:2rem 1.5rem;">
     <div style="font-size:3rem;margin-bottom:.75rem;">📊</div>
     <div style="font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;color:var(--gold);margin-bottom:.5rem;">AURAA Investor Access</div>
-    <div style="font-size:.8rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.6;">Select your investor type to access the relevant deck</div>
+    <div style="font-size:.8rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.6;">Pre-Seed SAFE round · open to qualified institutional investors and accelerators</div>
     <div style="display:grid;gap:.75rem;">
-      <button class="btn btn-gold" onclick="openInvestorDeck('vc')">🏦 Institutional / VC Deck →</button>
-      <button class="btn btn-primary" onclick="openInvestorDeck('hni')">👤 HNI Founding Partner Deck →</button>
+      <button class="btn btn-gold" onclick="openInvestorDeck('vc')">🏦 Open Institutional / VC Deck →</button>
     </div>
   </div>
   <div class="stats-grid">
-    <div class="stat-box"><div class="stat-val">$200K</div><div class="stat-lbl">VC Raise (SAFE)</div></div>
-    <div class="stat-box"><div class="stat-val">₦85M</div><div class="stat-lbl">HNI Pool</div></div>
+    <div class="stat-box"><div class="stat-val">$200K</div><div class="stat-lbl">Pre-Seed SAFE</div></div>
+    <div class="stat-box"><div class="stat-val">₦1.2-1.5B</div><div class="stat-lbl">Valuation Cap</div></div>
     <div class="stat-box"><div class="stat-val">247</div><div class="stat-lbl">Verified Drivers</div></div>
-    <div class="stat-box"><div class="stat-val">4</div><div class="stat-lbl">HNI Slots Only</div></div>
+    <div class="stat-box"><div class="stat-val">Lagos 2026</div><div class="stat-lbl">Launch</div></div>
   </div>`;
 }
 
@@ -6538,7 +6520,7 @@ Phase 3: Global urban markets with high vehicle ownership gaps`},
   {title:'Strategic Partners',body:`🛡️ <strong>Insurance Underwriter</strong> — Trip-based cover (interest confirmed, partner name protected until signature)<br/>💳 <strong>Flutterwave</strong> — Payment escrow &amp; settlement (onboarded)<br/>📡 <strong>Airtel Nigeria</strong> — M2M SIM verification (engaged)<br/>☁️ <strong>AWS Amplify</strong> — Hosting &amp; deployment (live)<br/>🔗 <strong>Pi Network</strong> — Wallet integration (pipeline)<br/><br/><em style="font-size:.75rem;color:var(--muted);">Partnerships confirmed before a single dollar raised. This is what execution looks like.</em>`},
 
   // ── 17. THE RAISE ──────────────────────────────────────────
-  {title:'The Raise',body:`<strong>$200,000 USD — Pre-Seed SAFE Note</strong><br/><br/>Valuation Cap: ₦1.2B–₦1.5B<br/>Instrument: SAFE (Simple Agreement for Future Equity)<br/>No immediate board seat at this stage<br/>Converts at next priced round (Series A)<br/><br/><strong>Use of funds:</strong><br/>• Engineering &amp; Mobile Apps: 40%<br/>• Driver Acquisition &amp; Onboarding: 25%<br/>• Insurance &amp; Telco Integration: 20%<br/>• Marketing &amp; Growth: 10%<br/>• Legal &amp; Operations: 5%<br/><br/><em style="color:var(--gold);">VCs are investing into the future round structure. HNIs are entering directly at the foundation level.</em>`,metric:'$200,000',metricLabel:'Pre-Seed SAFE · Valuation Cap ₦1.2B–₦1.5B'},
+  {title:'The Raise',body:`<strong>$200,000 USD — Pre-Seed SAFE Note</strong><br/><br/>Valuation Cap: ₦1.2B–₦1.5B<br/>Instrument: SAFE (Simple Agreement for Future Equity)<br/>No immediate board seat at this stage<br/>Converts at next priced round (Series A)<br/><br/><strong>Use of funds:</strong><br/>• Engineering &amp; Mobile Apps: 40%<br/>• Driver Acquisition &amp; Onboarding: 25%<br/>• Insurance &amp; Telco Integration: 20%<br/>• Marketing &amp; Growth: 10%<br/>• Legal &amp; Operations: 5%<br/><br/><em style="color:var(--gold);">Pre-seed capital priced into the Series A round structure — direct entry at the foundation level.</em>`,metric:'$200,000',metricLabel:'Pre-Seed SAFE · Valuation Cap ₦1.2B–₦1.5B'},
 
   // ── 18. WHY ME ─────────────────────────────────────────────
   {title:'The Founder',body:`<strong>Mayowa Olakunle Olawale-Great</strong><br/>Founder &amp; CEO, AURAA Technologies Limited<br/><br/><em>"I didn't study this problem. I lived it."</em><br/><br/>20+ years working with people, coordination, and real-world systems across Lagos. Deep network across entertainment, logistics, and talent management.<br/><br/>• Koolblazes Modelling Agency (2006) — people, trust, and human logistics<br/>• Club M (2016) — experience infrastructure and community monetisation<br/>• AURAA (2025) — the system these years were building toward<br/><br/>Known as <strong>"The Plug"</strong> — I connect things that work.<br/><br/>I assembled 247 verified drivers, secured partnership interest from a Nigerian insurance underwriter, and built a live MVP — before asking anyone for money.<br/><br/><strong>I execute first. Then I ask.</strong><br/><br/>Advisor: Ayodeji Charles Alao-Peters — UK-Africa Cross-Border Investment`},
@@ -6586,7 +6568,7 @@ Phase 3: Global urban markets`},
 ];
 
 function showDeck(type){
-  currentDeckType=type||'vc';
+  currentDeckType='vc'; // v11.1.1 — HNI path retired (April 24). Force VC regardless of arg.
   const overlay=document.getElementById('investorOverlay');
   const ndaKey='auraa_nda_'+currentDeckType;
   const passed=localStorage.getItem(ndaKey);
@@ -6634,6 +6616,8 @@ function closeDeck(){document.getElementById('investorOverlay').classList.remove
 // Routes a new investor through registration (captures name/email/type/ticket + issues a code),
 // then opens the deck matched to their investor type. Returning investors skip straight to the deck.
 function openInvestorDeck(type){
+  // v11.1.1 — HNI path retired (April 24 decision). Any call routes to VC.
+  type = 'vc';
   const me = IdentityStore.current();
   if(me && me.type === 'investor'){
     // Already registered — if they picked HNI but this is the VC deck (or vice versa), honour the click
