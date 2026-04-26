@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v11.2.0</title>
+<title>AURAA Technologies — MVP v11.2.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-<!-- v11.2.0 — Supabase JS client (founding_users durable writes) -->
+<!-- v11.2.1 — Server-side FU# assignment, fixed 23505 handling, splash overflow fix -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -606,9 +606,12 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
 #splash.s2 .s2-mark img{width:140px;height:140px;border-radius:50%;display:block;}
 #splash.s2 .s2-word{
   font-family:'Syne',sans-serif;font-weight:800;
-  font-size:4.5rem;letter-spacing:.14em;line-height:1;
+  /* v11.2.1 — was a fixed 4.5rem which overflowed on narrow viewports.
+     clamp scales fluidly between 2.4rem (small phones) and 4.5rem (laptop). */
+  font-size:clamp(2.4rem, 14vw, 4.5rem);letter-spacing:.12em;line-height:1;
   color:var(--gold);
   margin-top:1.6rem;
+  max-width:92vw;
   text-shadow:0 2px 30px rgba(201,168,76,.25);
   opacity:0;transform:translateY(14px);
   animation:s2WordIn 1.0s cubic-bezier(.2,.8,.2,1) .65s forwards;
@@ -1295,11 +1298,15 @@ const SupabaseSync = (function(){
     }
   }
 
-  // Build the row for founding_users from an MVP identity object
+  // Build the row for founding_users from an MVP identity object.
+  // v11.2.1: fu_number is OMITTED — Postgres assigns it via the
+  // founding_users_fu_number_seq sequence. We read the assigned number back
+  // from the INSERT response and reconcile it into localStorage so the
+  // user sees their *real* FU# instead of the per-device placeholder.
   function _buildRow(identity){
     const pledge = (typeof FU !== 'undefined') ? FU.getPledge(identity.email) : null;
     return {
-      fu_number: identity.fuSeq || null,
+      // fu_number deliberately omitted — server assigns
       name: identity.name || '',
       email: (identity.email||'').toLowerCase(),
       phone: identity.phone || null,
@@ -1311,6 +1318,47 @@ const SupabaseSync = (function(){
     };
   }
 
+  // Inspect a Supabase error object to figure out whether the 23505 unique
+  // violation came from the email column (legitimate "already registered")
+  // or from some other constraint (a real bug to surface).
+  function _isEmailConflict(error, attemptedEmail){
+    if(!error || error.code !== '23505') return false;
+    const blob = (
+      (error.message||'') + ' ' +
+      (error.details||'') + ' ' +
+      (error.hint||'')
+    ).toLowerCase();
+    // Postgres unique_violation messages typically include the constraint
+    // name or the conflicting column. We check for "email" explicitly so
+    // a fu_number collision (or any other column) does NOT get masked as
+    // a duplicate-email no-op.
+    if(blob.indexOf('email') !== -1) return true;
+    // Fall-back: if the error explicitly names the email value we tried
+    if(attemptedEmail && blob.indexOf(attemptedEmail.toLowerCase()) !== -1) return true;
+    return false;
+  }
+
+  // After a successful Supabase write, reconcile the server-assigned
+  // fu_number back into localStorage so the rest of the MVP shows the
+  // real number instead of the per-device placeholder.
+  function _reconcileFuNumber(email, serverFuNumber){
+    if(!email || !serverFuNumber) return;
+    if(typeof FU === 'undefined') return;
+    try {
+      const map = JSON.parse(localStorage.getItem(FU._seqKey) || '{"next":1,"byEmail":{}}');
+      const key = email.toLowerCase();
+      const oldFu = map.byEmail[key];
+      if(oldFu === serverFuNumber) return; // already correct
+      map.byEmail[key] = serverFuNumber;
+      // Bump map.next so future local-only FU# placeholders don't collide
+      if(map.next <= serverFuNumber) map.next = serverFuNumber + 1;
+      localStorage.setItem(FU._seqKey, JSON.stringify(map));
+      console.log('[SupabaseSync] reconciled FU# for '+email+': local '+oldFu+' → server #'+serverFuNumber);
+    } catch(e){
+      console.warn('[SupabaseSync] reconcile failed:', e);
+    }
+  }
+
   async function registerFoundingUser(identity){
     if(!identity || !identity.email){
       return { ok:false, reason:'missing-identity' };
@@ -1320,34 +1368,52 @@ const SupabaseSync = (function(){
     // Offline short-circuit
     if(typeof navigator !== 'undefined' && navigator.onLine === false){
       _enqueue(row, 'offline');
-      _setStatus('queued-offline', 'FU#'+row.fu_number);
+      _setStatus('queued-offline', row.email);
       return { ok:false, queued:true, reason:'offline' };
     }
 
     const client = _initClient();
     if(!client){
       _enqueue(row, 'client-not-ready');
-      _setStatus('queued-no-client', 'FU#'+row.fu_number);
+      _setStatus('queued-no-client', row.email);
       return { ok:false, queued:true, reason:'client-not-ready' };
     }
 
     try {
       const { data, error } = await client.from(TABLE).insert(row).select();
       if(error){
-        // 23505 = unique violation. Email already in DB = effective success.
-        if(error.code === '23505'){
-          _setStatus('duplicate', row.email+' already in DB');
+        if(_isEmailConflict(error, row.email)){
+          // Email genuinely already in DB → treat as success.
+          // Try to read back the existing row's fu_number for reconciliation.
+          try {
+            const { data: existing } = await client.from(TABLE)
+              .select('fu_number').eq('email', row.email).maybeSingle();
+            if(existing && existing.fu_number){
+              _reconcileFuNumber(row.email, existing.fu_number);
+            }
+          } catch(_){ /* best-effort */ }
+          _setStatus('duplicate-email', row.email+' already in DB');
           return { ok:true, duplicate:true };
         }
-        _enqueue(row, 'error: '+(error.message||error.code||'unknown'));
-        _setStatus('queued-error', error.message||error.code||'unknown');
+        // Any other error — including 23505 on a non-email column,
+        // network failures, RLS rejections — must NOT be silently swallowed.
+        // Verbose logging so future failures surface immediately.
+        const detail = error.code+': '+(error.message||'')+(error.details?' ['+error.details+']':'');
+        console.error('[SupabaseSync] write failed —', detail, error);
+        _enqueue(row, 'error: '+detail);
+        _setStatus('queued-error', detail);
         return { ok:false, queued:true, error };
       }
-      _setStatus('ok', 'FU#'+row.fu_number+' written');
-      // Refresh splash counter if it's mounted
+      // Success path — pull server-assigned fu_number back into local state
+      const inserted = (data && data[0]) || null;
+      if(inserted && inserted.fu_number){
+        _reconcileFuNumber(row.email, inserted.fu_number);
+      }
+      _setStatus('ok', 'FU#'+(inserted&&inserted.fu_number||'?')+' written for '+row.email);
       _hydrateSplashCounter();
-      return { ok:true, data };
+      return { ok:true, data, fu_number: inserted ? inserted.fu_number : null };
     } catch(e){
+      console.error('[SupabaseSync] write exception:', e);
       _enqueue(row, 'exception: '+(e.message||'unknown'));
       _setStatus('queued-exception', e.message||'unknown');
       return { ok:false, queued:true, error:e };
@@ -1399,11 +1465,35 @@ const SupabaseSync = (function(){
     let ok = 0, failed = 0;
     for(const item of queue){
       try {
-        const { error } = await client.from(TABLE).insert(item.record);
-        if(error && error.code !== '23505'){
-          _enqueue(item.record, 'replay-failed: '+(error.message||error.code));
-          failed++;
+        // v11.2.1: queued records from older clients may carry a stale
+        // client-side fu_number. Strip it so the server assigns a fresh one
+        // via the founding_users_fu_number_seq sequence.
+        const cleanRecord = Object.assign({}, item.record);
+        delete cleanRecord.fu_number;
+
+        const { data, error } = await client.from(TABLE).insert(cleanRecord).select();
+        if(error){
+          if(_isEmailConflict(error, cleanRecord.email)){
+            // Already in DB — count as success and reconcile FU#
+            try {
+              const { data: existing } = await client.from(TABLE)
+                .select('fu_number').eq('email', cleanRecord.email).maybeSingle();
+              if(existing && existing.fu_number){
+                _reconcileFuNumber(cleanRecord.email, existing.fu_number);
+              }
+            } catch(_){ /* best-effort */ }
+            ok++;
+          } else {
+            const detail = error.code+': '+(error.message||'');
+            console.error('[SupabaseSync] replay item failed —', detail, cleanRecord.email);
+            _enqueue(cleanRecord, 'replay-failed: '+detail);
+            failed++;
+          }
         } else {
+          const inserted = (data && data[0]) || null;
+          if(inserted && inserted.fu_number){
+            _reconcileFuNumber(cleanRecord.email, inserted.fu_number);
+          }
           ok++;
         }
       } catch(e){
@@ -1453,8 +1543,8 @@ const SupabaseSync = (function(){
     window.__AURAA_supabaseTest = async function(){
       const c = _initClient();
       if(!c){ console.error('[__AURAA_supabaseTest] client not ready'); return null; }
+      // v11.2.1: omit fu_number — let the server sequence assign it
       const testRow = {
-        fu_number: 999000 + Math.floor(Math.random()*999),
         name: 'Console Test '+new Date().toISOString().slice(11,19),
         email: 'console-test-'+Date.now()+'@auraa.test',
         phone: null, role: 'rider', org: null,
@@ -1463,7 +1553,7 @@ const SupabaseSync = (function(){
       console.log('[__AURAA_supabaseTest] inserting:', testRow);
       const { data, error } = await c.from(TABLE).insert(testRow).select();
       if(error){ console.error('[__AURAA_supabaseTest] error:', error); return error; }
-      console.log('[__AURAA_supabaseTest] ✅ success — check Supabase dashboard:', data);
+      console.log('[__AURAA_supabaseTest] ✅ success — server assigned FU#'+(data&&data[0]&&data[0].fu_number)+' — check Supabase dashboard:', data);
       return data;
     };
 
@@ -1482,7 +1572,7 @@ const SupabaseSync = (function(){
 
     window.__AURAA_supabaseReplay = replayQueue;
 
-    console.log('%c[SupabaseSync] v11.2.0 booted','color:#c9a84c;font-weight:bold;');
+    console.log('%c[SupabaseSync] v11.2.1 booted','color:#c9a84c;font-weight:bold;');
     console.log('Console helpers available:');
     console.log('  __AURAA_supabaseTest()    — POST a test row');
     console.log('  __AURAA_supabaseCount()   — GET row count');
@@ -2790,15 +2880,28 @@ function requireIdentity(purpose, opts){
         FU.saveSurvey(identity.email, null, state.q_role, state.role);
       }
 
-      // ═══ v11.2.0 — Supabase durable write ═══
+      // ═══ v11.2.1 — Supabase durable write w/ server-assigned FU# ═══
       // Fire-and-forget. Only on first registration of an email — the
       // founding_users table has email UNIQUE, so role additions stay
       // localStorage-only (multi-role per email is local-truth for MVP).
       // Failures queue to localStorage and replay on next online event.
+      // The server assigns fu_number via Postgres sequence; we reconcile
+      // it back into local state so the UI displays the real number.
       if(!existing){
         SupabaseSync.registerFoundingUser(identity).then(result => {
           if(result.ok && !result.duplicate){
-            console.log('[FU registration] synced to Supabase: '+identity.email);
+            console.log('[FU registration] synced — server assigned FU#'+result.fu_number+' for '+identity.email);
+            // Update the in-memory identity so any subsequent UI render
+            // (post-reveal dashboard, my-trips, etc) shows the real number
+            if(result.fu_number){
+              identity.fuSeq = result.fu_number;
+              try {
+                if(typeof IdentityStore !== 'undefined' && IdentityStore.set){
+                  const stored = IdentityStore.get ? IdentityStore.get() : null;
+                  if(stored) { stored.fuSeq = result.fu_number; IdentityStore.set(stored); }
+                }
+              } catch(_){ /* best-effort */ }
+            }
           } else if(result.ok && result.duplicate){
             console.log('[FU registration] already in Supabase: '+identity.email);
           } else if(result.queued){
@@ -6704,7 +6807,7 @@ function updateTicker(){
   const fuTotal = FU.totalFoundingUsers();
   const pledges = FU.pledgesOn();
   document.getElementById('tickerInner').textContent=
-    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v11.2.0  •  VC Raise: $200K SAFE  •  Netlify (auraahq.netlify.app)  `;
+    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v11.2.1  •  VC Raise: $200K SAFE  •  Netlify (auraahq.netlify.app)  `;
 }
 
 // ═══════════════════════════════════════════════
