@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v11.2.1</title>
+<title>AURAA Technologies — MVP v11.2.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-<!-- v11.2.1 — Server-side FU# assignment, fixed 23505 handling, splash overflow fix -->
+<!-- v11.2.2 — Rescue path for trapped pre-v11.2.1 users -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -1506,6 +1506,89 @@ const SupabaseSync = (function(){
     return { replayed:ok, failed };
   }
 
+  // v11.2.2 — Rescue path for trapped pre-v11.2.1 users.
+  //
+  // Background: under v11.2.0, when a user registered, the client tried to
+  // INSERT with a per-device fu_number=1. Postgres rejected with 23505 on
+  // the fu_number unique constraint. The client misread that as "email
+  // already in DB" and returned silent success. The user saw the FU# reveal
+  // and the dashboard. They told friends "done". But the row never landed
+  // in Supabase — and because nothing was enqueued, replayQueue cannot
+  // recover them. They are trapped: localStorage thinks they're registered,
+  // database has no record.
+  //
+  // This rescue runs once per page load. If the device has a saved identity
+  // but Supabase has no matching row, we fire a fresh registerFoundingUser
+  // call. The new code path omits fu_number, so Postgres assigns one cleanly,
+  // and the user finally lands in the database with a real FU#.
+  //
+  // Fully silent — no UI disruption. The user just sees "Welcome back" as
+  // they normally would.
+  async function rescueIfNeeded(){
+    try {
+      // Only run once per session
+      if(window.__AURAA_rescueAttempted) return { skipped:true, reason:'already-attempted' };
+      window.__AURAA_rescueAttempted = true;
+
+      const client = _initClient();
+      if(!client) return { skipped:true, reason:'no-client' };
+
+      // Get the device's stored identity
+      if(typeof IdentityStore === 'undefined' || !IdentityStore.current) {
+        return { skipped:true, reason:'no-identity-store' };
+      }
+      const identity = IdentityStore.current();
+      if(!identity || !identity.email){
+        return { skipped:true, reason:'no-stored-identity' };
+      }
+
+      const email = identity.email.toLowerCase();
+
+      // Check if this email already exists in Supabase
+      let existingRow = null;
+      try {
+        const { data, error } = await client
+          .from(TABLE)
+          .select('id, fu_number')
+          .eq('email', email)
+          .maybeSingle();
+        if(error){
+          console.warn('[SupabaseSync rescue] lookup failed:', error);
+          return { skipped:true, reason:'lookup-error' };
+        }
+        existingRow = data;
+      } catch(e){
+        console.warn('[SupabaseSync rescue] lookup exception:', e);
+        return { skipped:true, reason:'lookup-exception' };
+      }
+
+      if(existingRow && existingRow.fu_number){
+        // Already in DB — just reconcile the FU# back to localStorage in
+        // case the device's placeholder is wrong (e.g. shows FU#1 but
+        // server says FU#37). No further action needed.
+        _reconcileFuNumber(email, existingRow.fu_number);
+        return { skipped:true, reason:'already-in-db', fu_number:existingRow.fu_number };
+      }
+
+      // NOT in DB → this is a trapped pre-v11.2.1 user. Rescue them.
+      console.log('[SupabaseSync rescue] '+email+' missing from DB — firing rescue write');
+      const result = await registerFoundingUser(identity);
+      if(result.ok && result.fu_number){
+        console.log('%c[SupabaseSync rescue] ✅ recovered '+email+' as FU#'+result.fu_number,'color:#0a5c36;font-weight:bold;');
+        return { rescued:true, fu_number:result.fu_number };
+      } else if(result.queued){
+        console.warn('[SupabaseSync rescue] queued for retry:', result.reason);
+        return { queued:true, reason:result.reason };
+      } else {
+        console.warn('[SupabaseSync rescue] write returned non-ok:', result);
+        return { failed:true, result };
+      }
+    } catch(e){
+      console.error('[SupabaseSync rescue] unexpected error:', e);
+      return { failed:true, error:e };
+    }
+  }
+
   function status(){
     try { return JSON.parse(localStorage.getItem(STATUS_KEY) || 'null'); }
     catch(e){ return null; }
@@ -1522,6 +1605,10 @@ const SupabaseSync = (function(){
       setTimeout(() => {
         if(_initClient()){
           replayQueue();
+          // v11.2.2 — Rescue any pre-v11.2.1 trapped users on this device.
+          // Runs after replay, in case replay populated something useful.
+          // Delayed to allow IdentityStore + DOM to be ready.
+          setTimeout(() => { rescueIfNeeded(); }, 200);
           _hydrateSplashCounter();
         } else {
           console.warn('[SupabaseSync] supabase-js failed to load — running localStorage-only');
@@ -1530,6 +1617,8 @@ const SupabaseSync = (function(){
       }, 600);
     } else {
       replayQueue();
+      // v11.2.2 — same rescue hook on the fast path
+      setTimeout(() => { rescueIfNeeded(); }, 200);
       _hydrateSplashCounter();
     }
 
@@ -1572,12 +1661,22 @@ const SupabaseSync = (function(){
 
     window.__AURAA_supabaseReplay = replayQueue;
 
-    console.log('%c[SupabaseSync] v11.2.1 booted','color:#c9a84c;font-weight:bold;');
+    // v11.2.2 — Manual rescue trigger for debugging.
+    // Resets the "already attempted" flag so it will try again.
+    window.__AURAA_supabaseRescue = async function(){
+      window.__AURAA_rescueAttempted = false;
+      const result = await rescueIfNeeded();
+      console.log('[__AURAA_supabaseRescue]', result);
+      return result;
+    };
+
+    console.log('%c[SupabaseSync] v11.2.2 booted','color:#c9a84c;font-weight:bold;');
     console.log('Console helpers available:');
     console.log('  __AURAA_supabaseTest()    — POST a test row');
     console.log('  __AURAA_supabaseCount()   — GET row count');
     console.log('  __AURAA_supabaseStatus()  — show last status + queue');
     console.log('  __AURAA_supabaseReplay()  — drain the retry queue');
+    console.log('  __AURAA_supabaseRescue()  — recover trapped pre-v11.2.1 user (if any)');
   }
 
   return {
@@ -6807,7 +6906,7 @@ function updateTicker(){
   const fuTotal = FU.totalFoundingUsers();
   const pledges = FU.pledgesOn();
   document.getElementById('tickerInner').textContent=
-    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v11.2.1  •  VC Raise: $200K SAFE  •  Netlify (auraahq.netlify.app)  `;
+    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v11.2.2  •  VC Raise: $200K SAFE  •  Netlify (auraahq.netlify.app)  `;
 }
 
 // ═══════════════════════════════════════════════
