@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v11.3.1</title>
+<title>AURAA Technologies — MVP v11.3.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <!-- v11.2.2 — Rescue path for trapped pre-v11.2.1 users -->
 <!-- v11.3.0 — Flutterwave inline SDK + verified wallet funding -->
 <!-- v11.3.1 — LIVE Flutterwave keys activated -->
+<!-- v11.3.2 — Corrected live public key (prior key was 401 Unauthorized) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://checkout.flutterwave.com/v3.js"></script>
 <style>
@@ -1248,7 +1249,7 @@ const IdentityStore = {
 // ═══════════════════════════════════════════════
 const FlutterwaveConfig = {
   // ─── LIVE MODE — real money, real cards ───
-  PUBLIC_KEY: 'FLWPUBK-1d1184f80f392be45383c8145bd6e08b-X',
+  PUBLIC_KEY: 'FLWPUBK-d7c9dc98957665954d5d3358898dd57a-X',
   // ─── ROLLBACK TO TEST IF NEEDED: ───
   // PUBLIC_KEY: 'FLWPUBK_TEST-6e001aca23a397bb777de8945c13187e-X',
 
@@ -1703,7 +1704,7 @@ const SupabaseSync = (function(){
       return result;
     };
 
-    console.log('%c[SupabaseSync] v11.3.1 booted','color:#c9a84c;font-weight:bold;');
+    console.log('%c[SupabaseSync] v11.3.2 booted','color:#c9a84c;font-weight:bold;');
     console.log('Console helpers available:');
     console.log('  __AURAA_supabaseTest()    — POST a test row');
     console.log('  __AURAA_supabaseCount()   — GET row count');
