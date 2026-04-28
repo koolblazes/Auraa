@@ -6,7 +6,9 @@
 <title>AURAA Technologies — MVP v11.2.2</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <!-- v11.2.2 — Rescue path for trapped pre-v11.2.1 users -->
+<!-- v11.3.0 — Flutterwave inline SDK + verified wallet funding -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://checkout.flutterwave.com/v3.js"></script>
 <style>
 :root {
   --green: #0a5c36;
@@ -1227,6 +1229,36 @@ const IdentityStore = {
     }
     return null;
   },
+};
+
+// ═══════════════════════════════════════════════
+// FLUTTERWAVE INTEGRATION — v11.3.0
+//
+// Public key: safe to expose in frontend (Flutterwave docs confirm).
+// Secret key: NEVER appears here. Lives only in Netlify env vars
+//             and is used by /netlify/functions/verify-payment.js.
+//
+// Mode toggle: PUBLIC_KEY string determines test vs live.
+//   FLWPUBK_TEST-...  → test mode (only test cards work)
+//   FLWPUBK-...       → live mode (real money, real cards)
+//
+// To switch from test → live: change PUBLIC_KEY below AND change
+// FLW_SECRET_KEY env var in Netlify dashboard. Both must match.
+// ═══════════════════════════════════════════════
+const FlutterwaveConfig = {
+  // ─── START IN TEST MODE ───
+  PUBLIC_KEY: 'FLWPUBK_TEST-6e001aca23a397bb777de8945c13187e-X',
+  // ─── FLIP TO LIVE AFTER SMOKE TEST: ───
+  // PUBLIC_KEY: 'FLWPUBK-1d1184f80f392be45383c8145bd6e08b-X',
+
+  VERIFY_ENDPOINT: '/.netlify/functions/verify-payment',
+
+  isLive() {
+    return this.PUBLIC_KEY.startsWith('FLWPUBK-') && !this.PUBLIC_KEY.includes('TEST');
+  },
+  modeLabel() {
+    return this.isLive() ? 'LIVE' : 'TEST';
+  }
 };
 
 // ═══════════════════════════════════════════════
@@ -4269,12 +4301,110 @@ function renderWallet(){
 }
 
 function fundWallet(){
-  const amt=10000;
-  S.riderWallet+=amt;
-  localStorage.setItem('auraa_rider_wallet',S.riderWallet);
-  logTx({title:'Wallet Funded via Flutterwave',amount:amt,type:'credit'});
-  showToast(`₦${amt.toLocaleString()} added to wallet`);
-  renderWallet();
+  // ─────────────────────────────────────────────────────────────
+  // v11.3.0 — Real Flutterwave checkout + server-side verification
+  // Replaces the prior localStorage-only simulation.
+  //
+  // Flow:
+  //   1. Identity check (must be a registered Founding User)
+  //   2. Amount picker (₦100 - ₦100,000 for pilot)
+  //   3. FlutterwaveCheckout (real card / USSD / bank transfer)
+  //   4. On callback: POST to /netlify/functions/verify-payment
+  //   5. Only credit local wallet AFTER server confirms the payment
+  // ─────────────────────────────────────────────────────────────
+  const me = IdentityStore.current();
+  if(!me?.email){
+    showToast('Register as a Founding User first');
+    return;
+  }
+  if(typeof FlutterwaveCheckout === 'undefined'){
+    showToast('Payment SDK not loaded — refresh and retry');
+    return;
+  }
+
+  const amtStr = prompt('Fund AURAA Wallet (₦)\n\nMin ₦100 · Max ₦100,000', '5000');
+  if(amtStr === null) return; // user cancelled
+  const amt = parseInt(amtStr, 10);
+  if(!amt || isNaN(amt) || amt < 100 || amt > 100000){
+    showToast('Enter ₦100 – ₦100,000');
+    return;
+  }
+
+  // Real-money confirmation in LIVE mode
+  if(FlutterwaveConfig.isLive()){
+    if(!confirm(`LIVE PAYMENT — ₦${amt.toLocaleString()}\n\nReal money will be charged to your card.\n\nProceed?`)) return;
+  }
+
+  const tx_ref = 'AURAA-FUND-' + Date.now() + '-' + Math.random().toString(36).slice(2,8).toUpperCase();
+  showToast('Opening Flutterwave checkout…');
+
+  FlutterwaveCheckout({
+    public_key: FlutterwaveConfig.PUBLIC_KEY,
+    tx_ref: tx_ref,
+    amount: amt,
+    currency: 'NGN',
+    payment_options: 'card,ussd,banktransfer,opay',
+    customer: {
+      email: me.email,
+      name: me.name || me.email,
+      phone_number: me.phone || ''
+    },
+    customizations: {
+      title: 'AURAA Wallet Top-up',
+      description: `Fund AURAA wallet — Founding User #${me.fu_number || '?'}`
+    },
+    meta: {
+      fu_number: me.fu_number || null,
+      purpose: 'wallet_funding',
+      mvp_version: 'v11.3.0',
+      mode: FlutterwaveConfig.modeLabel()
+    },
+    callback: function(response){
+      console.log('[Flutterwave] callback:', response);
+      const txnId = response.transaction_id;
+      const ok = response.status === 'successful' || response.status === 'completed';
+      if(!txnId || !ok){
+        showToast('Payment did not complete');
+        return;
+      }
+      showToast('Verifying payment server-side…');
+
+      fetch(FlutterwaveConfig.VERIFY_ENDPOINT, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          tx_ref: tx_ref,
+          transaction_id: txnId,
+          expected_amount_kobo: amt * 100,
+          user_email: me.email,
+          user_fu_number: me.fu_number || null
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if(data.verified){
+          // Server confirmed — credit local wallet
+          S.riderWallet += amt;
+          localStorage.setItem('auraa_rider_wallet', S.riderWallet);
+          logTx({
+            title: `Wallet Funded via Flutterwave ✓ FW#${data.flw_tx_id}`,
+            amount: amt,
+            type: 'credit'
+          });
+          showToast(`✓ ₦${amt.toLocaleString()} verified & credited`);
+          renderWallet();
+        } else {
+          console.error('[Flutterwave] Verification failed:', data);
+          showToast('Verification failed: ' + (data.error || 'unknown'));
+        }
+      })
+      .catch(e => {
+        console.error('[Flutterwave] Verification error:', e);
+        showToast('Verification error: ' + e.message);
+      });
+    },
+    onclose: function(){ /* user closed modal — no-op */ }
+  });
 }
 
 function withdrawWallet(){
