@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v11.3.2</title>
+<title>AURAA Technologies — MVP v11.3.3</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <!-- v11.2.2 — Rescue path for trapped pre-v11.2.1 users -->
 <!-- v11.3.0 — Flutterwave inline SDK + verified wallet funding -->
 <!-- v11.3.1 — LIVE Flutterwave keys activated -->
 <!-- v11.3.2 — Corrected live public key (prior key was 401 Unauthorized) -->
+<!-- v11.3.3 — Welcome modal now reads true global FU count from Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://checkout.flutterwave.com/v3.js"></script>
 <style>
@@ -1704,7 +1705,7 @@ const SupabaseSync = (function(){
       return result;
     };
 
-    console.log('%c[SupabaseSync] v11.3.2 booted','color:#c9a84c;font-weight:bold;');
+    console.log('%c[SupabaseSync] v11.3.3 booted','color:#c9a84c;font-weight:bold;');
     console.log('Console helpers available:');
     console.log('  __AURAA_supabaseTest()    — POST a test row');
     console.log('  __AURAA_supabaseCount()   — GET row count');
@@ -2154,8 +2155,35 @@ function requireIdentity(purpose, opts){
     }
 
     const defaultRole = opts.role || S.role || 'rider';
-    const nextSeq = (JSON.parse(localStorage.getItem(FU._seqKey) || '{"next":1}')).next || 1;
+    // v11.3.3 — nextSeq must reflect REAL global registrations, not localStorage.
+    // We start with the localStorage best-guess (so the modal renders instantly)
+    // then upgrade to the live Supabase count as soon as it resolves.
+    let nextSeq = (JSON.parse(localStorage.getItem(FU._seqKey) || '{"next":1}')).next || 1;
+    const localFallback = Math.max(nextSeq, FU.totalFoundingUsers() + 1);
+    nextSeq = localFallback;
     const totalRegistered = FU.totalFoundingUsers();
+
+    // Kick off the live count fetch — non-blocking. When it resolves, the
+    // welcome badge and confirmation hint will be updated in place.
+    (async () => {
+      try {
+        if(typeof SupabaseSync === 'undefined' || !SupabaseSync.getFoundingUserCount) return;
+        const realCount = await SupabaseSync.getFoundingUserCount();
+        if(typeof realCount !== 'number') return;
+        const trueNext = realCount + 1;
+        nextSeq = trueNext;
+        // Update any DOM nodes that show the predicted FU number.
+        // Each node carries its own format via data-fu-next-seq attribute value:
+        //   data-fu-next-seq="FU #"        →  "FU #N"
+        //   data-fu-next-seq="Founding User #" → "Founding User #N"
+        document.querySelectorAll('[data-fu-next-seq]').forEach(el => {
+          const prefix = el.getAttribute('data-fu-next-seq') || 'FU #';
+          el.textContent = prefix + trueNext;
+        });
+      } catch(e){
+        // Silent — local fallback already in place.
+      }
+    })();
 
     // State held in closure — the user's answers as they progress
     const state = {
@@ -2691,7 +2719,7 @@ function requireIdentity(purpose, opts){
       }
       return {
         title: 'Ready to claim your seat?',
-        hint: `You'll be <strong style="color:var(--gold);">Founding User #${nextSeq}</strong> — one of the first ${FU.TOTAL.toLocaleString()}.`,
+        hint: `You'll be <strong style="color:var(--gold);"><span data-fu-next-seq="Founding User #">Founding User #${nextSeq}</span></strong> — one of the first ${FU.TOTAL.toLocaleString()}.`,
         body: `<div style="background:var(--dark3);border:1px solid var(--border);border-radius:12px;padding:.75rem .9rem;">
           <div class="wiz-summary-row"><span class="wiz-summary-label">Name</span><span class="wiz-summary-val">${state.name}</span></div>
           <div class="wiz-summary-row"><span class="wiz-summary-label">Email</span><span class="wiz-summary-val">${state.email}</span></div>
@@ -2769,7 +2797,7 @@ function requireIdentity(purpose, opts){
       <div class="identity-gate">
         <button class="ig-close" id="wizCloseX" aria-label="Close">×</button>
         <div class="ig-badge-wrap">
-          <span class="fu-global-badge">✨ <span class="fu-hash">${existing && FU.getSeq(existing.email) ? 'Founding User #'+FU.getSeq(existing.email) : 'Your seat: FU #'+nextSeq}</span></span>
+          <span class="fu-global-badge">✨ <span class="fu-hash">${existing && FU.getSeq(existing.email) ? 'Founding User #'+FU.getSeq(existing.email) : `Your seat: <span data-fu-next-seq="FU #">FU #${nextSeq}</span>`}</span></span>
         </div>
         <div class="ig-icon" style="animation:fuPop .6s cubic-bezier(.34,1.56,.64,1) forwards;">🚀</div>
         <div class="wiz-progress" id="wizProgress"></div>
