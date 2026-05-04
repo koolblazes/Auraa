@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v11.3.3</title>
+<title>AURAA Technologies — MVP v11.4.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <!-- v11.2.2 — Rescue path for trapped pre-v11.2.1 users -->
 <!-- v11.3.0 — Flutterwave inline SDK + verified wallet funding -->
 <!-- v11.3.1 — LIVE Flutterwave keys activated -->
 <!-- v11.3.2 — Corrected live public key (prior key was 401 Unauthorized) -->
 <!-- v11.3.3 — Welcome modal now reads true global FU count from Supabase -->
+<!-- v11.4.1 — Rotated live key, real-money trip flow, server-verified wallet funding, honest button labels, split unification, no fraud surfaces -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://checkout.flutterwave.com/v3.js"></script>
 <style>
@@ -1250,7 +1251,8 @@ const IdentityStore = {
 // ═══════════════════════════════════════════════
 const FlutterwaveConfig = {
   // ─── LIVE MODE — real money, real cards ───
-  PUBLIC_KEY: 'FLWPUBK-8ead71ac3fca253cf5ce341c0d2b6b1a-X',
+  // v11.4.1 — Rotated key (replaces invalid d7c9... per Flutterwave support)
+  PUBLIC_KEY: 'FLWPUBK-30a544b8ec8c98e8f3b1d4b96acfd81d-X',
   // ─── ROLLBACK TO TEST IF NEEDED: ───
   // PUBLIC_KEY: 'FLWPUBK_TEST-6e001aca23a397bb777de8945c13187e-X',
 
@@ -4116,9 +4118,9 @@ function calcFare(){
       <span class="split-label" style="color:var(--gold);">Total</span>
       <span class="split-val" style="color:var(--gold);">₦${f.total.toLocaleString()}</span>
     </div>
-    <div style="font-size:.68rem;color:var(--muted);margin:.5rem 0 .75rem;text-align:center;">💳 Fare is locked &amp; deducted from wallet before trip begins</div>
+    <div style="font-size:.68rem;color:var(--muted);margin:.5rem 0 .75rem;text-align:center;">💳 Wallet pays first. If wallet is short, you'll be sent to Flutterwave for live card payment.</div>
     <div style="margin-top:.5rem;">
-      <button class="btn btn-primary" onclick="bookTrip(${f.total})">Confirm &amp; Pay ₦${f.total.toLocaleString()}</button>
+      <button class="btn btn-primary" onclick="bookTrip(${f.total})">${S.riderWallet >= f.total ? `Confirm & Ride · ₦${f.total.toLocaleString()}` : `Confirm & Pay · ₦${f.total.toLocaleString()} (Live Card)`}</button>
     </div>
   </div>`;
 }
@@ -4158,8 +4160,94 @@ function bookTrip(fare){
 }
 
 function _doBookTrip(fare, rider){
-  if(S.riderWallet<fare){showToast('Insufficient wallet balance. Please fund.');return;}
-  S.riderWallet-=fare;
+  // v11.4.1 — Honest payment flow.
+  //   IF wallet >= fare → debit wallet, log 'wallet' tx
+  //   IF wallet <  fare → open Flutterwave checkout, server-verify, then proceed
+  // No silent simulation. The button label "Confirm Trip" reflects this honestly.
+
+  if(S.riderWallet >= fare){
+    // ─── WALLET PATH ────────────────────────────────────────────
+    S.riderWallet -= fare;
+    localStorage.setItem('auraa_rider_wallet', S.riderWallet);
+    _startTripFlow(fare, rider, 'wallet', null);
+    return;
+  }
+
+  // ─── INSUFFICIENT WALLET → REAL FLUTTERWAVE CHECKOUT ────────
+  if(typeof FlutterwaveCheckout === 'undefined'){
+    showToast('Payment SDK not loaded — refresh and retry');
+    return;
+  }
+  if(FlutterwaveConfig.isLive()){
+    if(!confirm(`Wallet balance ₦${S.riderWallet.toLocaleString()} is below trip fare ₦${fare.toLocaleString()}.\n\nProceed with LIVE card payment for the full trip fare?`)) return;
+  }
+
+  const tx_ref = 'AURAA-TRIP-' + Date.now() + '-' + Math.random().toString(36).slice(2,8).toUpperCase();
+  showToast('Opening Flutterwave checkout…');
+
+  FlutterwaveCheckout({
+    public_key: FlutterwaveConfig.PUBLIC_KEY,
+    tx_ref: tx_ref,
+    amount: fare,
+    currency: 'NGN',
+    payment_options: 'card,ussd,banktransfer,opay',
+    customer: {
+      email: rider.email,
+      name: rider.name || rider.email,
+      phone_number: rider.phone || ''
+    },
+    customizations: {
+      title: 'AURAA Trip Payment',
+      description: `${(LS.pickup?.name||'Pickup')} → ${(LS.dropoff?.name||'Destination')}`
+    },
+    meta: {
+      fu_number: rider.fu_number || null,
+      purpose: 'trip_payment',
+      mvp_version: 'v11.4.1',
+      mode: FlutterwaveConfig.modeLabel()
+    },
+    callback: function(response){
+      console.log('[Flutterwave/trip] callback:', response);
+      const txnId = response.transaction_id;
+      const ok = response.status === 'successful' || response.status === 'completed';
+      if(!txnId || !ok){
+        showToast('Payment did not complete — trip cancelled');
+        return;
+      }
+      showToast('Verifying payment server-side…');
+
+      fetch(FlutterwaveConfig.VERIFY_ENDPOINT, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          tx_ref: tx_ref,
+          transaction_id: txnId,
+          expected_amount_kobo: fare * 100,
+          user_email: rider.email,
+          user_fu_number: rider.fu_number || null,
+          purpose: 'trip_payment'
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if(data.verified){
+          _startTripFlow(fare, rider, 'flutterwave', { tx_ref, flw_tx_id: data.flw_tx_id });
+        } else {
+          console.error('[Flutterwave/trip] verification failed:', data);
+          showToast('Payment verification failed: ' + (data.error || 'unknown') + ' — trip cancelled. Contact support if charged.');
+        }
+      })
+      .catch(e => {
+        console.error('[Flutterwave/trip] verify error:', e);
+        showToast('Verification error — trip cancelled. Contact support if charged.');
+      });
+    },
+    onclose: function(){ /* user closed modal — no-op */ }
+  });
+}
+
+// v11.4.1 — Shared trip-start logic, called from either wallet path or Flutterwave path.
+function _startTripFlow(fare, rider, paymentSource, paymentMeta){
   S.tripState='searching';
   Transition.beat(1200);
 
@@ -4168,7 +4256,6 @@ function _doBookTrip(fare, rider){
   const svc = S.service.toUpperCase();
   const tripId = 'PROOF-' + Date.now();
 
-  // Write to localStorage — Driver and Admin will pick this up
   const proofTrip = {
     id: tripId,
     svc,
@@ -4182,17 +4269,26 @@ function _doBookTrip(fare, rider){
     ownerAuth: svc === 'ASSIST',
     owner: svc === 'ASSIST' ? 'Demo Owner' : null,
     vehicle: svc === 'ASSIST' ? 'Toyota Camry • LAG-234-KA' : null,
+    paymentSource,           // 'wallet' or 'flutterwave'
+    paymentMeta: paymentMeta || null
   };
   localStorage.setItem('auraa_live_trip', JSON.stringify(proofTrip));
   localStorage.setItem('auraa_proof_trip_status', 'searching');
 
-  logEvent({ action:'Trip Booked', tag:'active', detail:`${svcLabel(S.service)} · ${pickup} → ${dropoff} · ₦${fare.toLocaleString()}`, role:'rider', meta:{tripId} });
-  logTx({title:`AURAA ${svcLabel(S.service)} — ${pickup} → ${dropoff}`,amount:-fare,type:'debit'});
+  const sourceLabel = paymentSource === 'flutterwave' ? '🟢 LIVE · Card' : 'Wallet';
+  logEvent({ action:'Trip Booked', tag:'active', detail:`${svcLabel(S.service)} · ${pickup} → ${dropoff} · ₦${fare.toLocaleString()} · ${sourceLabel}`, role:'rider', meta:{tripId, paymentSource} });
+  logTx({
+    title: paymentSource === 'flutterwave'
+      ? `🟢 LIVE Trip Payment — ${pickup} → ${dropoff} (FW#${paymentMeta?.flw_tx_id||'?'})`
+      : `AURAA ${svcLabel(S.service)} — ${pickup} → ${dropoff}`,
+    amount: -fare,
+    type: 'debit'
+  });
   LS.pickup=null; LS.dropoff=null;
   renderTripActive();
-  // After 3s mark as active (driver can now see and accept)
+
   setTimeout(()=>{
-    if(S.tripState!=='searching') return; // user may have logged out
+    if(S.tripState!=='searching') return;
     S.tripState='active';
     const pt=JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
     if(pt){pt.status='active';localStorage.setItem('auraa_live_trip',JSON.stringify(pt));}
@@ -5201,11 +5297,12 @@ function pauseRiderAccess(){
 function completeDispatchTrip(riderId){
   if(!dispatchShiftActive) return;
   const fare=Math.round(1800+Math.random()*1500);
+  // v11.4.1 — Unified BIKE split: Biker 65 / Dispatcher (owner) 15 / Platform 20.
+  // Insurance & telco costs absorbed inside Platform share as operational cost.
   const split={
-    driverEarnings:Math.round(fare*0.40),
-    ownerEarnings: Math.round(fare*0.40),
-    platformFee:   Math.round(fare*0.15),
-    telcoFee:      Math.round(fare*0.05),
+    driverEarnings:Math.round(fare*0.65),
+    ownerEarnings: Math.round(fare*0.15),
+    platformFee:   Math.round(fare*0.20),
   };
   const trip={
     id:'DISP-'+Date.now(),
@@ -7066,7 +7163,7 @@ function updateTicker(){
   const fuTotal = FU.totalFoundingUsers();
   const pledges = FU.pledgesOn();
   document.getElementById('tickerInner').textContent=
-    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  247 Standby Drivers  •  ₦1.2M Revenue  •  1,840 Trips  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave  •  Telco: Airtel Nigeria  •  MVP v11.2.2  •  VC Raise: $200K SAFE  •  Netlify (auraahq.netlify.app)  `;
+    `🟢 Platform Live  •  ${fuTotal.toLocaleString()}/${FU.TOTAL.toLocaleString()} Founding Users  •  ${pledges} Save→Own Pledges  •  Trip-Based Insurance (Partner Signing In Progress)  •  Payments: Flutterwave (Live)  •  Telco: Airtel Nigeria (In Discussion)  •  MVP v11.4.1  •  VC Raise: $200K SAFE  •  app.auraahq.com  `;
 }
 
 // ═══════════════════════════════════════════════
@@ -7147,13 +7244,13 @@ const vcSlides=[
   {title:'Trust &amp; Safety Layer',body:`<strong>Every trip is protected end-to-end.</strong><br/><br/>🔐 <strong>Driver Verification</strong><br/>CAC identity check + Airtel Nigeria M2M SIM biometric confirmation + community referral<br/><br/>🛡️ <strong>Trip-Based Insurance</strong><br/>Every Go and Assist trip is insured by our underwriting partner. Cover begins at trip start, ends at trip termination. Visible on every trip receipt. Partner name protected until signature.<br/><br/>📋 <strong>Trip Logging</strong><br/>Every trip timestamped, route-recorded, and stored for claims, audits, and disputes<br/><br/>🚨 <strong>Emergency Escalation</strong><br/>In-app distress signal → notifies AURAA operations + owner + emergency contact<br/><br/><strong>Trust is not a feature. It is the infrastructure.</strong>`},
 
   // ── 11. BUSINESS MODEL ─────────────────────────────────────
-  {title:'Business Model',body:`<strong>Every trip feeds the ecosystem.</strong><br/><br/><strong>AURAA Go</strong> (rider-booked, insured):<br/>Driver 55% • Owner 25% • AURAA 10% • Telco 5% • Insurance 5%<br/><br/><strong>AURAA Assist</strong> (owner-only, insured):<br/>Driver 50% • AURAA 30% • Owner Loyalty Credit 10% • Telco 5% • Insurance 5%<br/><em style="font-size:.72rem;color:var(--muted);">Loyalty credit returns to owner wallet as discount on next Assist trip.</em><br/><br/><strong>Bike Dispatch</strong> (owner ≠ rider):<br/>Rider 60% • Bike Owner 30% • AURAA 10%<br/><br/><strong>Bicycle &amp; Skate Dispatch</strong>:<br/>Rider 80% • AURAA 20%<br/><br/><strong>Additional revenue streams:</strong><br/>• Fix-it visibility fees — mechanics pay for listing priority<br/>• Insurance premium share — underwriting partnership<br/>• Telco verification fee — 5% per Go/Assist trip<br/>• SaaS/API access — fleet operators<br/><br/><em style="color:var(--gold);">Multiple recurring layers — not a single-stream bet.</em>`},
+  {title:'Business Model',body:`<strong>Every trip feeds the ecosystem.</strong><br/><br/><strong>AURAA GO</strong> (standard rides):<br/>Driver 55% • Vehicle Owner 25% • Platform 20%<br/><br/><strong>AURAA ASSIST</strong> (your car · our driver):<br/>Driver 50% • Vehicle Owner 30% • Platform 20%<br/><br/><strong>AURAA BIKE</strong> (motorcycle dispatch):<br/>Biker 65% • Dispatcher (owner) 15% • Platform 20%<br/><br/><strong>AURAA SKATE</strong> &amp; <strong>BICYCLE</strong>:<br/>Operator 80% • Platform 20%<br/><br/><em style="font-size:.72rem;color:var(--muted);">Insurance and telco costs are absorbed within the Platform share as operational expenses — not deducted from operator earnings.</em><br/><br/><strong>Additional revenue streams:</strong><br/>• Fix-it monthly subscriptions — mechanics pay for visibility<br/>• Fleet leasing &amp; corporate accounts<br/>• SaaS/API access — fleet operators<br/><br/><em style="color:var(--gold);">Multiple recurring layers — not a single-stream bet.</em>`},
 
   // ── 12. UNIT ECONOMICS ─────────────────────────────────────
-  {title:'Unit Economics',body:`<strong>Sample AURAA Assist Trip — ₦3,800</strong><br/><br/>Driver: ₦2,660 (70%)<br/>Owner Rebate: ₦380 (10%)<br/>Platform: ₦380 (10%)<br/>Insurance: ₦190 (5%)<br/>Telco: ₦190 (5%)<br/><br/><strong>Platform net per trip: ₦380 minimum</strong><br/>At 500 trips/day → ₦190,000 platform revenue/day<br/>At 10,000 trips/day → ₦3.8M platform revenue/day<br/><br/><em style="color:var(--gold);">Assist generates 2× the owner loyalty of standard ride-hailing.</em>`},
+  {title:'Unit Economics',body:`<strong>Sample AURAA ASSIST Trip — ₦3,800</strong><br/><br/>Driver (50%): ₦1,900<br/>Vehicle Owner (30%): ₦1,140<br/>Platform (20%): ₦760<br/><br/><em style="font-size:.72rem;color:var(--muted);">Platform share covers insurance, telco verification, payment rail, infrastructure, and growth.</em><br/><br/><strong>Platform net per trip: ₦760</strong><br/>At 500 trips/day → ₦380,000 platform revenue/day<br/>At 10,000 trips/day → ₦7.6M platform revenue/day<br/><br/><em style="color:var(--gold);">ASSIST generates 2× the owner loyalty of standard ride-hailing because the owner keeps their vehicle and earns from it.</em>`},
 
   // ── 13. TRACTION ───────────────────────────────────────────
-  {title:'Traction',body:`✅ Fully functional MVP deployed on Netlify<br/>✅ Multi-role testing — riders, drivers, owners, admin<br/>✅ Real usage flows completed across all 5 services<br/>✅ Insurance underwriting partner — interest confirmed, signature in progress<br/>✅ Flutterwave — payment rail onboarded<br/>✅ Airtel Nigeria — M2M SIM discussions active<br/>✅ CAC registered December 2025<br/>✅ 247 verified standby drivers ready to launch<br/>✅ BKR Capital, Madica, Pi Network Ventures, Future Africa — submitted<br/><br/>Early feedback is focused on trust, insurance, and control.<br/><strong style="color:var(--gold);">Users are not confused. They are asking real operational questions.</strong>`},
+  {title:'Traction',body:`✅ Fully functional MVP deployed at app.auraahq.com<br/>✅ Multi-role testing — riders, drivers, owners, admin<br/>✅ Real usage flows completed across all 5 services<br/>✅ Live Flutterwave payment integration with server-side verification<br/>✅ Insurance discussions in progress with carrier partners<br/>✅ Airtel Nigeria — M2M SIM discussions active<br/>✅ CAC registered December 2025 (RC 9058278)<br/>✅ Mechanics network onboarding underway<br/>✅ Skater community onboarding underway<br/>✅ BKR Capital, Madica, Pi Network Ventures, Future Africa — engaged<br/><br/>Early feedback is focused on trust, insurance, and control.<br/><strong style="color:var(--gold);">Users are not confused. They are asking real operational questions.</strong>`},
 
   // ── 13b. FOUNDING USER CAMPAIGN (LIVE) ─────────────────────
   {title:'Founding User Campaign — Live Numbers',body:(()=>{
