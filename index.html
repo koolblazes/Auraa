@@ -3,272 +3,1046 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA — MVP Service Portal</title>
+<title>AURAA — Relax. We've got this.</title>
+<meta name="description" content="AURAA is a vehicle-centric mobility platform connecting verified drivers, vehicle owners, and riders across Lagos. Your car earns while you work."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=DM+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600&family=Syne:wght@800&display=swap" rel="stylesheet"/>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://checkout.flutterwave.com/v3.js"></script>
-
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=DM+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 :root {
   --green:#0a5c36;
   --green-deep:#072b1a;
+  --green-mid:#0e7a49;
+  --green-glow:rgba(10,92,54,0.25);
   --gold:#c9a84c;
+  --gold-light:#e2c87a;
   --gold-pale:rgba(201,168,76,0.12);
+  --gold-glow:rgba(201,168,76,0.3);
   --cream:#f5f0e8;
+  --cream-dark:#e8e0d0;
+  --white:#ffffff;
   --ink:#0a0e0c;
+  --ink-soft:#1a2420;
+  --text-body:#2d3b35;
+  --text-muted:#6b7d74;
+  --text-dim:#9aada5;
   --border:rgba(201,168,76,0.2);
+  --border-soft:rgba(10,92,54,0.15);
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
-body{
-    background:var(--ink);
-    color:var(--cream);
-    font-family:'Outfit',sans-serif;
-    min-height:100vh;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    padding:20px;
-}
+html{scroll-behavior:smooth;font-size:16px}
+body{background:var(--ink);color:var(--cream);font-family:'Outfit',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 
-/* NOISE TEXTURE */
+/* ── NOISE TEXTURE OVERLAY ── */
 body::before{
   content:'';position:fixed;inset:0;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
   pointer-events:none;z-index:1000;opacity:0.4;
 }
 
-.app-container {
-    width: 100%;
-    max-width: 480px;
-    background: var(--green-deep);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 40px;
-    position: relative;
-    z-index: 2;
+/* ── NAV ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:900;
+  padding:20px 5vw;
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(10,14,12,0.85);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  transition:all 0.3s;
+}
+.nav-logo{
+  font-family:'Cormorant Garamond',serif;
+  font-size:1.8rem;font-weight:700;letter-spacing:4px;
+  color:var(--gold);text-decoration:none;
+}
+.nav-logo span{color:var(--cream);font-weight:300}
+.nav-links{display:flex;gap:32px;align-items:center}
+.nav-links a{
+  font-size:0.78rem;letter-spacing:2px;text-transform:uppercase;
+  color:var(--text-dim);text-decoration:none;transition:color 0.2s;font-weight:500;
+}
+.nav-links a:hover{color:var(--gold)}
+.nav-cta{
+  background:var(--gold);color:var(--ink);
+  padding:10px 22px;border-radius:2px;
+  font-size:0.75rem;letter-spacing:2px;text-transform:uppercase;font-weight:600;
+  text-decoration:none;transition:all 0.2s;
+}
+.nav-cta:hover{background:var(--gold-light);transform:translateY(-1px)}
+.hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;background:none;border:none;padding:4px}
+.hamburger span{width:22px;height:1.5px;background:var(--cream);display:block;transition:all 0.3s}
+.mobile-menu{display:none;position:fixed;inset:0;background:var(--ink);z-index:800;flex-direction:column;align-items:center;justify-content:center;gap:40px}
+.mobile-menu.open{display:flex}
+.mobile-menu a{font-family:'Cormorant Garamond',serif;font-size:2.5rem;color:var(--cream);text-decoration:none;letter-spacing:2px}
+.mobile-menu a:hover{color:var(--gold)}
+
+/* ── HERO ── */
+.hero{
+  min-height:100vh;
+  display:flex;flex-direction:column;justify-content:flex-end;
+  padding:0 5vw 80px;
+  position:relative;overflow:hidden;
+}
+.hero-bg{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 60% 50% at 70% 40%, rgba(10,92,54,0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 60% at 20% 80%, rgba(201,168,76,0.08) 0%, transparent 50%),
+    linear-gradient(160deg, var(--ink) 0%, var(--green-deep) 50%, var(--ink) 100%);
+}
+.hero-grid{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(201,168,76,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201,168,76,0.04) 1px, transparent 1px);
+  background-size:60px 60px;
+}
+.hero-eyebrow{
+  font-family:'DM Mono',monospace;
+  font-size:0.7rem;letter-spacing:4px;text-transform:uppercase;
+  color:var(--gold);margin-bottom:24px;
+  display:flex;align-items:center;gap:12px;
+  opacity:0;animation:fadeUp 0.8s ease 0.2s forwards;
+}
+.hero-eyebrow::before{content:'';width:40px;height:1px;background:var(--gold)}
+.hero-headline{
+  font-family:'Cormorant Garamond',serif;
+  font-size:clamp(3rem,8vw,7rem);
+  font-weight:300;line-height:1.05;letter-spacing:-1px;
+  margin-bottom:32px;
+  opacity:0;animation:fadeUp 0.8s ease 0.4s forwards;
+}
+.hero-headline em{font-style:italic;color:var(--gold)}
+.hero-headline strong{font-weight:700}
+.hero-sub{
+  font-size:1.05rem;color:var(--text-muted);
+  max-width:560px;line-height:1.7;margin-bottom:48px;font-weight:300;
+  opacity:0;animation:fadeUp 0.8s ease 0.6s forwards;
+}
+.hero-actions{
+  display:flex;gap:16px;flex-wrap:wrap;
+  opacity:0;animation:fadeUp 0.8s ease 0.8s forwards;
+}
+.btn-primary{
+  background:var(--gold);color:var(--ink);
+  padding:16px 36px;border-radius:2px;
+  font-size:0.8rem;letter-spacing:2px;text-transform:uppercase;font-weight:600;
+  text-decoration:none;transition:all 0.25s;display:inline-block;
+}
+.btn-primary:hover{background:var(--gold-light);transform:translateY(-2px);box-shadow:0 8px 30px var(--gold-glow)}
+.btn-secondary{
+  background:transparent;color:var(--cream);
+  padding:16px 36px;border-radius:2px;border:1px solid rgba(245,240,232,0.3);
+  font-size:0.8rem;letter-spacing:2px;text-transform:uppercase;font-weight:500;
+  text-decoration:none;transition:all 0.25s;display:inline-block;
+}
+.btn-secondary:hover{border-color:var(--gold);color:var(--gold)}
+.hero-stat-row{
+  position:absolute;bottom:80px;right:5vw;
+  display:flex;gap:40px;
+  opacity:0;animation:fadeUp 0.8s ease 1s forwards;
+}
+.hero-stat{text-align:right}
+.hero-stat-num{
+  font-family:'Cormorant Garamond',serif;font-size:2.5rem;font-weight:600;
+  color:var(--gold);line-height:1;
+}
+.hero-stat-label{font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-top:4px}
+
+/* ── SECTION BASICS ── */
+section{padding:100px 5vw;position:relative}
+.section-label{
+  font-family:'DM Mono',monospace;
+  font-size:0.68rem;letter-spacing:4px;text-transform:uppercase;
+  color:var(--gold);margin-bottom:20px;
+  display:flex;align-items:center;gap:12px;
+}
+.section-label::before{content:'';width:30px;height:1px;background:var(--gold)}
+.section-title{
+  font-family:'Cormorant Garamond',serif;
+  font-size:clamp(2rem,5vw,3.8rem);
+  font-weight:300;line-height:1.1;
+  margin-bottom:20px;
+}
+.section-title em{font-style:italic;color:var(--gold)}
+.section-body{
+  font-size:1rem;color:var(--text-muted);
+  line-height:1.8;max-width:600px;font-weight:300;
 }
 
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 40px;
+/* ── PROBLEM SECTION ── */
+.problem{background:var(--cream);color:var(--ink)}
+.problem .section-label{color:var(--green)}
+.problem .section-label::before{background:var(--green)}
+.problem .section-title{color:var(--ink)}
+.problem .section-title em{color:var(--green)}
+.problem .section-body{color:var(--text-body)}
+.problem-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:60px}
+.problem-card{
+  background:var(--ink);color:var(--cream);
+  padding:48px 40px;position:relative;overflow:hidden;
+}
+.problem-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--green),var(--gold));
+}
+.problem-card-num{
+  font-family:'Cormorant Garamond',serif;
+  font-size:5rem;font-weight:700;color:var(--green);
+  opacity:0.15;position:absolute;top:20px;right:30px;line-height:1;
+}
+.problem-card-icon{font-size:2rem;margin-bottom:20px}
+.problem-card h3{
+  font-family:'Cormorant Garamond',serif;
+  font-size:1.6rem;font-weight:600;margin-bottom:12px;color:var(--cream);
+}
+.problem-card p{font-size:0.9rem;color:var(--text-muted);line-height:1.7;font-weight:300}
+.problem-card.gold-accent::before{background:linear-gradient(90deg,var(--gold),var(--gold-light))}
+
+/* ── THE PLATFORM ── */
+.platform{background:var(--ink)}
+.platform-intro{
+  display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start;margin-bottom:80px;
+}
+.platform-visual{
+  position:relative;
+  background:var(--green-deep);
+  border:1px solid var(--border);
+  border-radius:4px;padding:48px;
+  overflow:hidden;
+}
+.platform-visual::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at 30% 70%,rgba(201,168,76,0.1),transparent 60%);
+}
+.flow-diagram{display:flex;flex-direction:column;gap:0}
+.flow-node{
+  display:flex;align-items:center;gap:20px;
+  padding:20px 0;
+  border-bottom:1px solid rgba(201,168,76,0.1);
+}
+.flow-node:last-child{border-bottom:none}
+.flow-icon{
+  width:48px;height:48px;border-radius:50%;
+  background:var(--gold-pale);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.3rem;flex-shrink:0;
+}
+.flow-text h4{font-size:0.9rem;font-weight:600;color:var(--cream);margin-bottom:4px;letter-spacing:0.5px}
+.flow-text p{font-size:0.78rem;color:var(--text-dim);line-height:1.5}
+.flow-arrow{
+  text-align:center;color:var(--gold);font-size:1.2rem;
+  padding:4px 0;margin-left:24px;
+}
+.earn-badge{
+  margin-top:24px;
+  background:var(--gold-pale);border:1px solid var(--border);
+  border-radius:4px;padding:16px 20px;
+  display:flex;align-items:center;gap:12px;
+}
+.earn-badge-icon{font-size:1.5rem}
+.earn-badge-text{font-size:0.8rem;color:var(--gold);font-weight:500;letter-spacing:0.5px}
+
+/* ── SERVICES ── */
+.services{background:var(--green-deep)}
+.services-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:2px;margin-top:60px}
+.service-card{
+  background:var(--ink);padding:56px 48px;
+  position:relative;overflow:hidden;cursor:default;
+  transition:all 0.4s;
+}
+.service-card::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--green),var(--gold));
+  transform:scaleX(0);transform-origin:left;
+  transition:transform 0.4s;
+}
+.service-card:hover::after{transform:scaleX(1)}
+.service-card:hover{background:var(--green-deep)}
+.service-tag{
+  font-family:'DM Mono',monospace;
+  font-size:0.65rem;letter-spacing:3px;text-transform:uppercase;
+  color:var(--gold);margin-bottom:24px;display:block;
+}
+.service-name{
+  font-family:'Cormorant Garamond',serif;
+  font-size:2.2rem;font-weight:600;color:var(--cream);
+  margin-bottom:8px;letter-spacing:1px;
+}
+.service-tagline{
+  font-size:0.85rem;color:var(--text-dim);
+  font-style:italic;margin-bottom:24px;
+}
+.service-desc{font-size:0.9rem;color:var(--text-muted);line-height:1.75;font-weight:300;margin-bottom:32px}
+.service-split{
+  display:flex;gap:8px;flex-wrap:wrap;
+}
+.split-pill{
+  font-family:'DM Mono',monospace;
+  font-size:0.68rem;padding:6px 12px;
+  border:1px solid var(--border);border-radius:2px;
+  color:var(--gold);letter-spacing:1px;background:var(--gold-pale);
 }
 
-.logo {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 1.8rem;
-    font-weight: 700;
-    letter-spacing: 4px;
-    color: var(--gold);
+/* ── CORPORATE PAIN SECTION ── */
+.corporate{
+  background:var(--cream);color:var(--ink);
+  position:relative;overflow:hidden;
+}
+.corporate::before{
+  content:'AURAA';
+  position:absolute;font-family:'Cormorant Garamond',serif;
+  font-size:20vw;font-weight:700;
+  color:rgba(10,92,54,0.04);
+  right:-2vw;top:50%;transform:translateY(-50%);
+  pointer-events:none;letter-spacing:-4px;
+}
+.corporate .section-label{color:var(--green)}
+.corporate .section-label::before{background:var(--green)}
+.corporate .section-title{color:var(--ink)}
+.corporate .section-title em{color:var(--green)}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:60px}
+.compare-card{border-radius:4px;padding:48px 40px;position:relative;overflow:hidden}
+.compare-card.pain{
+  background:var(--ink);color:var(--cream);
+  border:1px solid rgba(255,80,80,0.2);
+}
+.compare-card.pain::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,#c0392b,#e74c3c);
+}
+.compare-card.solution{
+  background:var(--green-deep);color:var(--cream);
+  border:1px solid var(--border);
+}
+.compare-card.solution::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--green),var(--gold));
+}
+.compare-label{
+  font-family:'DM Mono',monospace;
+  font-size:0.65rem;letter-spacing:3px;text-transform:uppercase;
+  margin-bottom:20px;display:block;
+}
+.compare-card.pain .compare-label{color:#e74c3c}
+.compare-card.solution .compare-label{color:var(--gold)}
+.compare-card h3{
+  font-family:'Cormorant Garamond',serif;
+  font-size:1.8rem;font-weight:600;margin-bottom:20px;
+}
+.pain-list,.solution-list{list-style:none;display:flex;flex-direction:column;gap:14px}
+.pain-list li,.solution-list li{
+  display:flex;align-items:flex-start;gap:12px;
+  font-size:0.9rem;line-height:1.6;font-weight:300;
+}
+.pain-list li::before{content:'✗';color:#e74c3c;flex-shrink:0;font-size:1rem;margin-top:1px}
+.solution-list li::before{content:'✓';color:var(--gold);flex-shrink:0;font-size:1rem;margin-top:1px}
+.pain-list li{color:var(--text-muted)}
+.solution-list li{color:var(--text-muted)}
+
+/* ── HOW IT WORKS ── */
+.how{background:var(--ink)}
+.steps-row{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:2px;
+  margin-top:60px;
+}
+.step{
+  padding:48px 36px;
+  background:var(--green-deep);
+  position:relative;
+}
+.step-num{
+  font-family:'Cormorant Garamond',serif;
+  font-size:4rem;font-weight:700;color:var(--gold);
+  opacity:0.2;position:absolute;top:24px;right:28px;line-height:1;
+}
+.step-icon{font-size:2.2rem;margin-bottom:20px}
+.step h3{
+  font-family:'Cormorant Garamond',serif;
+  font-size:1.4rem;font-weight:600;color:var(--cream);margin-bottom:12px;
+}
+.step p{font-size:0.88rem;color:var(--text-muted);line-height:1.7;font-weight:300}
+.step-connector{
+  position:absolute;right:-1px;top:50%;transform:translateY(-50%);
+  width:2px;height:40px;background:linear-gradient(var(--green),var(--gold));
 }
 
-.wallet-display {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.8rem;
-    color: var(--gold);
-    border: 1px solid var(--border);
-    padding: 8px 12px;
+/* ── TRACTION ── */
+.traction{
+  background:linear-gradient(160deg,var(--green-deep) 0%,var(--ink) 60%);
+  position:relative;overflow:hidden;
+}
+.traction::before{
+  content:'';position:absolute;
+  top:-200px;right:-200px;width:500px;height:500px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(201,168,76,0.08),transparent 70%);
+  pointer-events:none;
+}
+.traction-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+  background:var(--border);margin:60px 0;
+}
+.traction-item{
+  background:var(--ink);padding:48px 36px;
+  text-align:center;
+}
+.traction-num{
+  font-family:'Cormorant Garamond',serif;
+  font-size:3.5rem;font-weight:600;color:var(--gold);
+  line-height:1;margin-bottom:8px;
+}
+.traction-label{font-size:0.75rem;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);font-weight:500}
+.traction-sub{font-size:0.8rem;color:var(--text-muted);margin-top:8px;line-height:1.4;font-weight:300}
+.partner-strip{
+  display:flex;align-items:center;gap:32px;flex-wrap:wrap;
+  padding:32px 40px;
+  background:rgba(201,168,76,0.05);border:1px solid var(--border);border-radius:4px;
+}
+.partner-label{font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);font-weight:500;white-space:nowrap}
+.partner-divider{width:1px;height:24px;background:var(--border)}
+.partner-name{
+  font-family:'Cormorant Garamond',serif;
+  font-size:1.1rem;font-weight:600;color:var(--cream);letter-spacing:1px;
+}
+.partner-status{
+  font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;
+  color:var(--gold);background:var(--gold-pale);
+  border:1px solid var(--border);padding:4px 10px;border-radius:2px;
 }
 
-/* ONBOARDING TABS */
-.tabs {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 30px;
-    overflow-x: auto;
-    padding-bottom: 5px;
+/* ── INVESTOR SECTION ── */
+.investor{background:var(--cream);color:var(--ink)}
+.investor .section-label{color:var(--green)}
+.investor .section-label::before{background:var(--green)}
+.investor .section-title{color:var(--ink)}
+.investor .section-title em{color:var(--green)}
+.investor-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:60px}
+.investor-card{
+  background:var(--ink);border-radius:4px;
+  padding:48px 40px;
+  border:1px solid rgba(201,168,76,0.15);
+}
+.inv-label{
+  font-family:'DM Mono',monospace;
+  font-size:0.65rem;letter-spacing:3px;text-transform:uppercase;
+  color:var(--text-dim);margin-bottom:24px;display:block;
+}
+.inv-row{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.inv-row:last-child{border-bottom:none}
+.inv-key{font-size:0.82rem;color:var(--text-muted);font-weight:300}
+.inv-val{font-size:0.9rem;color:var(--cream);font-weight:500;text-align:right}
+.inv-val.gold{color:var(--gold);font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:600}
+
+/* ── WAITLIST ── */
+.waitlist{
+  background:var(--green);color:var(--cream);
+  text-align:center;position:relative;overflow:hidden;
+}
+.waitlist::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 60% 80% at 50% -20%,rgba(201,168,76,0.15),transparent),
+    radial-gradient(ellipse 60% 60% at 50% 120%,rgba(0,0,0,0.3),transparent);
+}
+.waitlist .section-title{
+  font-size:clamp(2rem,5vw,4rem);margin:0 auto 20px;max-width:700px;
+}
+.waitlist .section-body{margin:0 auto 48px;max-width:500px;color:rgba(245,240,232,0.7)}
+.waitlist-form{
+  display:flex;gap:12px;max-width:480px;margin:0 auto 24px;flex-wrap:wrap;justify-content:center;
+}
+.waitlist-input{
+  flex:1;min-width:220px;
+  background:rgba(255,255,255,0.1);
+  border:1px solid rgba(255,255,255,0.2);
+  border-radius:2px;padding:16px 20px;
+  color:var(--cream);font-family:'Outfit',sans-serif;font-size:0.9rem;
+  outline:none;transition:border-color 0.2s;
+}
+.waitlist-input::placeholder{color:rgba(245,240,232,0.4)}
+.waitlist-input:focus{border-color:var(--gold)}
+.waitlist-select{
+  background:rgba(255,255,255,0.1);
+  border:1px solid rgba(255,255,255,0.2);
+  border-radius:2px;padding:16px 20px;
+  color:var(--cream);font-family:'Outfit',sans-serif;font-size:0.9rem;
+  outline:none;cursor:pointer;
+}
+.waitlist-select option{background:var(--green-deep);color:var(--cream)}
+.waitlist-btn{
+  background:var(--gold);color:var(--ink);
+  padding:16px 32px;border:none;border-radius:2px;
+  font-family:'Outfit',sans-serif;font-size:0.8rem;letter-spacing:2px;
+  text-transform:uppercase;font-weight:600;cursor:pointer;transition:all 0.2s;
+}
+.waitlist-btn:hover{background:var(--gold-light);transform:translateY(-1px)}
+.waitlist-note{font-size:0.75rem;color:rgba(245,240,232,0.5);letter-spacing:1px}
+.success-msg{
+  display:none;
+  background:rgba(255,255,255,0.1);border:1px solid rgba(201,168,76,0.3);
+  border-radius:4px;padding:20px 32px;
+  font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-style:italic;
+  color:var(--gold);margin:0 auto;max-width:480px;
 }
 
-.tab {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    padding: 8px 16px;
-    border: 1px solid var(--border);
-    color: var(--gold);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: 0.3s;
+/* ── FOOTER ── */
+footer{
+  background:var(--ink);
+  padding:60px 5vw 32px;
+  border-top:1px solid var(--border);
+}
+.footer-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:48px;flex-wrap:wrap;gap:40px}
+.footer-brand .logo{
+  font-family:'Cormorant Garamond',serif;
+  font-size:2rem;font-weight:700;letter-spacing:4px;color:var(--gold);
+  display:block;margin-bottom:8px;
+}
+.footer-brand p{font-size:0.82rem;color:var(--text-dim);max-width:220px;line-height:1.6;font-weight:300}
+.footer-tagline{
+  font-family:'Cormorant Garamond',serif;
+  font-style:italic;font-size:1rem;color:var(--text-dim);margin-top:16px;
+}
+.footer-links h4{
+  font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;
+  color:var(--text-dim);margin-bottom:20px;font-weight:500;
+}
+.footer-links ul{list-style:none;display:flex;flex-direction:column;gap:10px}
+.footer-links ul a{
+  font-size:0.85rem;color:var(--text-muted);text-decoration:none;
+  transition:color 0.2s;font-weight:300;
+}
+.footer-links ul a:hover{color:var(--gold)}
+.footer-bottom{
+  display:flex;justify-content:space-between;align-items:center;
+  padding-top:32px;border-top:1px solid rgba(255,255,255,0.05);
+  flex-wrap:wrap;gap:16px;
+}
+.footer-bottom p{font-size:0.75rem;color:var(--text-dim);font-weight:300}
+.footer-rc{
+  font-family:'DM Mono',monospace;font-size:0.68rem;
+  color:var(--text-dim);letter-spacing:2px;
 }
 
-.tab.active {
-    background: var(--gold);
-    color: var(--ink);
+/* ── ANIMATIONS ── */
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(30px)}
+  to{opacity:1;transform:translateY(0)}
 }
-
-.form-section { display: none; animation: fadeUp 0.5s ease forwards; }
-.form-section.active { display: block; }
-
-.input-group { margin-bottom: 24px; }
-label {
-    display: block;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: var(--gold);
-    margin-bottom: 10px;
+.reveal{
+  opacity:0;transform:translateY(40px);
+  transition:opacity 0.7s ease,transform 0.7s ease;
 }
+.reveal.visible{opacity:1;transform:translateY(0)}
 
-input, select {
-    width: 100%;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid var(--border);
-    padding: 16px;
-    color: var(--cream);
-    font-family: 'Outfit', sans-serif;
-    outline: none;
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  .problem-grid,.services-grid,.compare-grid,.investor-grid{grid-template-columns:1fr}
+  .platform-intro{grid-template-columns:1fr;gap:40px}
+  .steps-row{grid-template-columns:1fr}
+  .traction-grid{grid-template-columns:1fr 1fr}
+  .nav-links{display:none}
+  .hamburger{display:flex}
+  .hero-stat-row{position:relative;bottom:auto;right:auto;margin-top:48px;justify-content:flex-start}
 }
-
-input:focus { border-color: var(--gold); }
-
-.btn-primary {
-    width: 100%;
-    background: var(--gold);
-    color: var(--ink);
-    padding: 18px;
-    border: none;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.8rem;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    font-weight: 600;
-    cursor: pointer;
-    transition: 0.25s;
-}
-
-.btn-primary:hover { background: var(--cream); transform: translateY(-2px); }
-
-#toast {
-    position: fixed;
-    bottom: 30px;
-    background: var(--gold);
-    color: var(--ink);
-    padding: 16px 30px;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 1px;
-    display: none;
-    z-index: 2000;
-}
-
-@keyframes fadeUp {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+@media(max-width:600px){
+  .traction-grid{grid-template-columns:1fr}
+  section{padding:70px 5vw}
+  .hero{padding-bottom:60px}
+  .compare-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
 <body>
 
-<div id="toast"></div>
+<nav id="nav">
+  <a href="#" class="nav-logo">AURAA<span>HQ</span></a>
+  <div class="nav-links">
+    <a href="#services">Services</a>
+    <a href="#corporate">For Corporates</a>
+    <a href="#traction">Traction</a>
+    <a href="#investors">Investors</a>
+    <a href="https://app.auraahq.com" target="_blank" class="nav-cta">Open App →</a>
+  </div>
+  <button class="hamburger" onclick="toggleMenu()" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
 
-<div class="app-container">
-    <div class="header">
-        <div class="logo">AURAA</div>
-        <div class="wallet-display" id="balance">₦0.00</div>
-    </div>
-
-    <div class="tabs">
-        <div class="tab active" onclick="switchTab('rider', this)">Rider</div>
-        <div class="tab" onclick="switchTab('driver', this)">Driver</div>
-        <div class="tab" onclick="switchTab('owner', this)">Owner</div>
-        <div class="tab" onclick="switchTab('mechanic', this)">Mechanic</div>
-    </div>
-
-    <div id="rider" class="form-section active">
-        <div class="input-group">
-            <label>Pickup Node</label>
-            <input type="text" id="r-origin" placeholder="Current location..."/>
-        </div>
-        <div class="input-group">
-            <label>Destination Node</label>
-            <input type="text" id="r-dest" placeholder="Where to?"/>
-        </div>
-        <button class="btn-primary" onclick="processSync('Rider')">Request Activation</button>
-    </div>
-
-    <div id="driver" class="form-section">
-        <div class="input-group">
-            <label>Full Legal Name</label>
-            <input type="text" placeholder="As on ID..."/>
-        </div>
-        <div class="input-group">
-            <label>License Class</label>
-            <select>
-                <option>Class B</option>
-                <option>Class C</option>
-            </select>
-        </div>
-        <button class="btn-primary" onclick="processSync('Driver')">Submit Verification</button>
-    </div>
-
-    <div id="owner" class="form-section">
-        <div class="input-group">
-            <label>Vehicle Make/Model</label>
-            <input type="text" placeholder="e.g. 2018 Toyota Camry"/>
-        </div>
-        <button class="btn-primary" onclick="processSync('Owner')">Register Asset</button>
-    </div>
-
-    <div id="mechanic" class="form-section">
-        <div class="input-group">
-            <label>Workshop Area</label>
-            <input type="text" placeholder="Lagos Mainland/Island..."/>
-        </div>
-        <button class="btn-primary" onclick="processSync('Mechanic')">Join Fleet Support</button>
-    </div>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#services" onclick="toggleMenu()">Services</a>
+  <a href="#corporate" onclick="toggleMenu()">For Corporates</a>
+  <a href="#traction" onclick="toggleMenu()">Traction</a>
+  <a href="#investors" onclick="toggleMenu()">Investors</a>
+  <a href="#waitlist" onclick="toggleMenu()" style="color:var(--gold)">Join Waitlist</a>
 </div>
 
+<section class="hero" id="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div style="position:relative;z-index:2">
+    <div class="hero-eyebrow">Lagos Mobility Infrastructure · Est. 2025</div>
+    <h1 class="hero-headline">
+      Your vehicle<br/>earns while<br/><em>you work</em>.
+    </h1>
+    <p class="hero-sub">
+      AURAA connects verified drivers to idle vehicles — so owners build passive income, drivers access structured work, and riders travel safely. Every trip is insured, traceable, and fair.
+    </p>
+    <div class="hero-actions">
+      <a href="#waitlist" class="btn-primary">Join the Waitlist</a>
+      <a href="#investors" class="btn-secondary">Investor Access</a>
+    </div>
+    <div class="hero-stat-row">
+      <div class="hero-stat">
+        <div class="hero-stat-num">200+</div>
+        <div class="hero-stat-label">Verified Drivers</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-num">500</div>
+        <div class="hero-stat-label">Founding Vehicle Slots</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-num">4</div>
+        <div class="hero-stat-label">Service Modes</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="problem" id="problem">
+  <div class="section-label">The Problem</div>
+  <h2 class="section-title">Millions of naira<br/>sitting in driveways. <em>Idle.</em></h2>
+  <p class="section-body">Lagos has more vehicles per square kilometre than almost anywhere in Africa — yet most sit parked while their owners commute to work, attend meetings, or run errands. Meanwhile, thousands of skilled drivers have no structured, insured, dignified way to work.</p>
+  <div class="problem-grid reveal">
+    <div class="problem-card">
+      <div class="problem-card-num">01</div>
+      <div class="problem-card-icon">🚗</div>
+      <h3>The Idle Asset Problem</h3>
+      <p>Your car spends 8–12 hours a day in a car park or compound while you work. It depreciates. It earns nothing. AURAA turns it into a managed income-generating asset — without you lifting a finger.</p>
+    </div>
+    <div class="problem-card gold-accent">
+      <div class="problem-card-num">02</div>
+      <div class="problem-card-icon">👷</div>
+      <h3>The Unstructured Driver Problem</h3>
+      <p>Talented drivers in Lagos have no formal employment structure, no insurance, no guaranteed income. AURAA gives them vetted access to vehicles, structured trips, and earnings they can count on.</p>
+    </div>
+    <div class="problem-card gold-accent">
+      <div class="problem-card-num">03</div>
+      <div class="problem-card-icon">🏢</div>
+      <h3>The Corporate Overhead Problem</h3>
+      <p>Organisations pay full monthly salaries to in-house drivers — even on days they don't drive, during holidays, leave, and downtime. The cost is fixed. The value is not.</p>
+    </div>
+    <div class="problem-card">
+      <div class="problem-card-num">04</div>
+      <div class="problem-card-icon">🔒</div>
+      <h3>The Safety Gap</h3>
+      <p>Hailing a stranger to drive you is a leap of faith. AURAA eliminates that — every driver is background-checked, ID-verified, medically cleared, and insured. Every trip is traceable via SmartCam.</p>
+    </div>
+  </div>
+</section>
+
+<section class="platform" id="platform">
+  <div class="section-label">The Platform</div>
+  <h2 class="section-title">Three roles.<br/><em>One ecosystem.</em></h2>
+  <div style="display:inline-flex;gap:10px;flex-wrap:wrap;margin-bottom:40px">
+    <span style="font-family:'DM Mono',monospace;font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;padding:6px 14px;border:1px solid var(--border);border-radius:2px;color:var(--gold)">Trust Infrastructure</span>
+    <span style="font-family:'DM Mono',monospace;font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;padding:6px 14px;border:1px solid var(--border);border-radius:2px;color:var(--gold)">Mobility Operating System</span>
+    <span style="font-family:'DM Mono',monospace;font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;padding:6px 14px;border:1px solid var(--border);border-radius:2px;color:var(--gold)">Asset Utilisation Layer</span>
+  </div>
+  <div class="platform-intro reveal">
+    <div>
+      <p class="section-body" style="margin-bottom:32px">AURAA is not a ride-hailing app. It is a vehicle-centric mobility infrastructure — a three-sided platform where vehicle owners, verified drivers, and riders all win on every trip.</p>
+      <p class="section-body">When a rider books an AURAA GO trip, the fare is automatically split: the driver earns 55%, the vehicle owner earns 25%, and AURAA retains 20% to cover insurance, operations, and growth. No manual settlements. No disputes. The platform handles everything.</p>
+      <div class="earn-badge" style="margin-top:40px">
+        <div class="earn-badge-icon">⚡</div>
+        <div class="earn-badge-text">Instant automated earnings distribution on every completed trip</div>
+      </div>
+    </div>
+    <div class="platform-visual">
+      <div class="flow-diagram">
+        <div class="flow-node">
+          <div class="flow-icon">🧍</div>
+          <div class="flow-text">
+            <h4>Rider Books a Trip</h4>
+            <p>Selects service, pickup, drop-off. Fare calculated instantly.</p>
+          </div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-node">
+          <div class="flow-icon">🚗</div>
+          <div class="flow-text">
+            <h4>Driver Accepts</h4>
+            <p>Verified, insured, background-checked. Arrives in minutes.</p>
+          </div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-node">
+          <div class="flow-icon">📹</div>
+          <div class="flow-text">
+            <h4>Trip Runs on SmartCam</h4>
+            <p>Every trip recorded, traceable, insured by Heirs Insurance.</p>
+          </div>
+        </div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-node">
+          <div class="flow-icon">💰</div>
+          <div class="flow-text">
+            <h4>Earnings Split Instantly</h4>
+            <p>Driver 55% · Owner 25% · AURAA 20%. Automatic.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="services" id="services">
+  <div class="section-label">Our Services</div>
+  <h2 class="section-title">Four ways<br/>AURAA <em>moves Lagos.</em></h2>
+  <div class="services-grid reveal">
+
+    <div class="service-card">
+      <span class="service-tag">Service 01 · Ride-Hailing</span>
+      <div class="service-name">AURAA GO</div>
+      <div class="service-tagline">A verified driver. An insured vehicle. Total peace of mind.</div>
+      <p class="service-desc">The flagship AURAA experience. A fully vetted driver arrives in an owner's insured, SmartCam-equipped vehicle. The owner's car earns while they're at work. The driver earns a structured income. The rider travels safely. Everyone wins — on every trip.</p>
+      <div class="service-split">
+        <span class="split-pill">Driver 55%</span>
+        <span class="split-pill">Owner 25%</span>
+        <span class="split-pill">Platform 20%</span>
+      </div>
+    </div>
+
+    <div class="service-card">
+      <span class="service-tag">Service 02 · Executive / Corporate · Exclusive</span>
+      <div class="service-name">AURAA ASSIST</div>
+      <div class="service-tagline">Your car. Our driver. You in the back seat.</div>
+      <p class="service-desc">Book a verified AURAA driver to operate <em>your own vehicle</em>. No stranger's car. No unfamiliar smell. No risk. Your car, driven professionally, from your home to your destination — and returned. Ideal for executives, corporates, and anyone who wants the comfort of their own vehicle without the stress of driving.</p>
+      <div class="service-split">
+        <span class="split-pill">Driver 50%</span>
+        <span class="split-pill">Owner 30%</span>
+        <span class="split-pill">Platform 20%</span>
+      </div>
+    </div>
+
+    <div class="service-card">
+      <span class="service-tag">Service 03 · Last-Mile Dispatch</span>
+      <div class="service-name">AURAA SKATE</div>
+      <div class="service-tagline">The fastest way through Lagos traffic — on wheels.</div>
+      <p class="service-desc">Inline skater dispatchers handle last-mile deliveries in dense urban corridors where motorcycles and cars get stuck. Packages, documents, small items — delivered fast, tracked, and professional. Skaters own their equipment, earn 75% of every delivery, and represent a new category of dignified urban work.</p>
+      <div class="service-split">
+        <span class="split-pill">Skater 75%</span>
+        <span class="split-pill">Platform 25%</span>
+      </div>
+    </div>
+
+    <div class="service-card">
+      <span class="service-tag">Service 04 · Motorcycle Dispatch</span>
+      <div class="service-name">AURAA BIKE</div>
+      <div class="service-tagline">Speed with structure. Dispatch done properly.</div>
+      <p class="service-desc">Motorcycle dispatch reimagined with the AURAA standard — every rider vetted, every delivery tracked, every trip insured. Businesses and individuals get speed without the chaos of unregulated okada networks. A dispatcher manages the route; the biker earns 65% of every trip.</p>
+      <div class="service-split">
+        <span class="split-pill">Biker 65%</span>
+        <span class="split-pill">Dispatcher 15%</span>
+        <span class="split-pill">Platform 20%</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section class="corporate" id="corporate">
+  <div class="section-label">For Organisations</div>
+  <h2 class="section-title">The true cost of<br/>an in-house driver<br/>is <em>never just the salary.</em></h2>
+  <p class="section-body">Most Lagos organisations employ one or more full-time drivers. It feels like control. The reality is a fixed overhead that pays whether the driver works or not — and a liability that most HR teams underestimate until something goes wrong.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card pain">
+      <span class="compare-label">The Traditional Model — What it actually costs</span>
+      <h3>Your In-House Driver</h3>
+      <ul class="pain-list">
+        <li>Monthly salary paid regardless of trips made — holidays, sick days, downtime included</li>
+        <li>Accommodation, feeding allowance, and welfare obligations that compound over time</li>
+        <li>No insurance coverage if an accident occurs — liability falls on the organisation</li>
+        <li>No dashcam or trip record — disputes have no evidence trail</li>
+        <li>Termination is a legal and emotional process — not a button to press</li>
+        <li>One driver means one vehicle, one schedule, zero flexibility</li>
+        <li>Background checks, if done, are rarely formalised or repeated</li>
+      </ul>
+    </div>
+    <div class="compare-card solution">
+      <span class="compare-label">AURAA ASSIST — What you actually get</span>
+      <h3>AURAA ASSIST for Your Organisation</h3>
+      <ul class="solution-list">
+        <li>Pay only for trips made — no salary, no allowance, no idle cost</li>
+        <li>Zero accommodation or welfare obligation — AURAA handles driver welfare</li>
+        <li>Every trip insured by our insurance partner — liability is covered</li>
+        <li>Every trip recorded via SmartCam — full accountability and evidence</li>
+        <li>Need more drivers? Book more. Need fewer? Just don't book — zero friction</li>
+        <li>Access a pool of verified drivers — not one person whose absence stops everything</li>
+        <li>All drivers background-checked, ID-verified, and medically cleared before onboarding</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="reveal" style="margin-top:48px;padding:40px;background:var(--ink);border-radius:4px;border-left:3px solid var(--green)">
+    <p style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:300;color:var(--cream);line-height:1.5;margin-bottom:12px">
+      "An organisation with 3 in-house drivers spends an average of <span style="color:var(--gold);font-weight:600">₦1.8M–₦2.4M per year</span> on driver salaries alone — before accommodation, meals, and liability. With AURAA ASSIST, you pay only for the trips you actually need."
+    </p>
+    <p style="font-size:0.78rem;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase">AURAA Internal Analysis · Lagos Corporate Market · 2026</p>
+  </div>
+</section>
+
+<section class="how" id="how">
+  <div class="section-label">How It Works</div>
+  <h2 class="section-title">Up and running<br/>in <em>three steps.</em></h2>
+  <div class="steps-row reveal">
+    <div class="step">
+      <div class="step-num">01</div>
+      <div class="step-icon">📱</div>
+      <h3>Register Your Role</h3>
+      <p>Are you a Rider, Driver, or Vehicle Owner? Each role has its own onboarding — designed for your specific needs. Owners register their vehicle and claim a Founding Vehicle slot. Drivers complete verification and medical clearance. Riders are ready in minutes.</p>
+      <div class="step-connector"></div>
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <div class="step-icon">🔗</div>
+      <h3>Get Matched</h3>
+      <p>AURAA's matching engine connects riders to the right driver and vehicle for their service type. Every match is verified, insured, and tracked. Owners don't need to be present — their vehicle is already registered and deployed.</p>
+      <div class="step-connector"></div>
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <div class="step-icon">💳</div>
+      <h3>Trip Runs. Everyone Earns.</h3>
+      <p>Payment is processed via Flutterwave. Earnings are split automatically the moment a trip completes — no manual transfers, no disputes. Drivers see their balance grow. Owners receive passive income. AURAA earns its platform fee. Clean, transparent, instant.</p>
+    </div>
+  </div>
+</section>
+
+<section class="traction" id="traction">
+  <div class="section-label">Traction</div>
+  <h2 class="section-title">Built. Deployed.<br/><em>Ready to scale.</em></h2>
+  <p class="section-body" style="color:rgba(245,240,232,0.6)">AURAA is not a concept deck. The platform is live, the driver network is built, and enterprise partnerships are in progress.</p>
+
+  <div class="traction-grid reveal">
+    <div class="traction-item">
+      <div class="traction-num">200+</div>
+      <div class="traction-label">Verified Drivers</div>
+      <div class="traction-sub">Background-checked, ID-verified, medically cleared — Lagos pilot ready</div>
+    </div>
+    <div class="traction-item">
+      <div class="traction-num">500</div>
+      <div class="traction-label">Founding Vehicle Slots</div>
+      <div class="traction-sub">SmartCam-equipped founding owners — first 500 vehicles, priority earnings access</div>
+    </div>
+    <div class="traction-item">
+      <div class="traction-num">Live</div>
+      <div class="traction-label">MVP Deployed</div>
+      <div class="traction-sub">Rider, Driver and Owner interfaces active at app.auraahq.com</div>
+    </div>
+    <div class="traction-item">
+      <div class="traction-num">RC ✓</div>
+      <div class="traction-label">CAC Incorporated</div>
+      <div class="traction-sub">AURAA Technologies Limited · RC 9058278 · December 2025</div>
+    </div>
+    <div class="traction-item">
+      <div class="traction-num">NDA ✓</div>
+      <div class="traction-label">Insurance Partner</div>
+      <div class="traction-sub">NDA signed — trip-based insurance integration under technical review</div>
+    </div>
+    <div class="traction-item">
+      <div class="traction-num">M2M ✓</div>
+      <div class="traction-label">Telco Partner</div>
+      <div class="traction-sub">M2M data infrastructure — active commercial engagement, CRF stage</div>
+    </div>
+    <div class="traction-item">
+      <div class="traction-num">🔧</div>
+      <div class="traction-label">Mechanic Network</div>
+      <div class="traction-sub">Verified mechanics onboarding — fleet servicing infrastructure for founding vehicles</div>
+    </div>
+    <div class="traction-item">
+      <div class="traction-num">₦0</div>
+      <div class="traction-label">External Funding</div>
+      <div class="traction-sub">Bootstrapped to this point — every milestone achieved without investor capital</div>
+    </div>
+    <div class="traction-item">
+      <div class="traction-num">4</div>
+      <div class="traction-label">Service Modes Live</div>
+      <div class="traction-sub">GO · ASSIST · SKATE · BIKE — full ecosystem active on one platform</div>
+    </div>
+  </div>
+
+  <div class="partner-strip reveal">
+    <span class="partner-label">Enterprise Partnerships</span>
+    <div class="partner-divider"></div>
+    <span class="partner-name">Insurance Partner</span>
+    <span class="partner-status">Active Engagement</span>
+    <div class="partner-divider"></div>
+    <span class="partner-name">Telco Partner</span>
+    <span class="partner-status">Active Engagement</span>
+    <div class="partner-divider"></div>
+    <span class="partner-name">Payment Infrastructure</span>
+    <span class="partner-status">Live</span>
+    <div class="partner-divider"></div>
+    <span class="partner-name">Verified Mechanic Network</span>
+    <span class="partner-status">Onboarding</span>
+  </div>
+</section>
+
+<section class="investor" id="investors">
+  <div class="section-label">For Investors</div>
+  <h2 class="section-title">Pre-seed.<br/><em>$200,000.</em><br/>YC SAFE.</h2>
+  <p class="section-body" style="color:var(--text-body);margin-bottom:12px">A vehicle-first mobility infrastructure play on Africa's most dynamic urban market. We're raising $200K to complete our 500-vehicle pilot, lock in enterprise partnerships, and prove unit economics before a seed round.</p>
+  <p class="section-body" style="color:var(--green);font-weight:500;margin-bottom:0">Founding allocation opens before public launch. Early investors access preferred terms.</p>
+
+  <div class="investor-grid reveal">
+    <div class="investor-card">
+      <span class="inv-label">Deal Terms</span>
+      <div class="inv-row"><span class="inv-key">Instrument</span><span class="inv-val">YC Post-Money SAFE</span></div>
+      <div class="inv-row"><span class="inv-key">Round Size</span><span class="inv-val gold">USD 200,000</span></div>
+      <div class="inv-row"><span class="inv-key">Pre-Money Cap</span><span class="inv-val">NGN 1,780,000,000</span></div>
+      <div class="inv-row"><span class="inv-key">Discount</span><span class="inv-val">20%</span></div>
+      <div class="inv-row"><span class="inv-key">Equity at Conversion</span><span class="inv-val gold">15%</span></div>
+      <div class="inv-row"><span class="inv-key">Board Seat</span><span class="inv-val">Not offered</span></div>
+      <div class="inv-row"><span class="inv-key">Stage</span><span class="inv-val">Pre-Seed</span></div>
+    </div>
+    <div class="investor-card">
+      <span class="inv-label">Use of Funds</span>
+      <div class="inv-row"><span class="inv-key">500-Vehicle Pilot Operations</span><span class="inv-val gold">₦80M</span></div>
+      <div class="inv-row"><span class="inv-key">Driver Medical Evaluations (500×₦10K)</span><span class="inv-val">₦5M</span></div>
+      <div class="inv-row"><span class="inv-key">Airtel M2M Onboarding + SIMs</span><span class="inv-val">₦40M</span></div>
+      <div class="inv-row"><span class="inv-key">SmartCam Hardware (Founding Fleet)</span><span class="inv-val">₦87M</span></div>
+      <div class="inv-row"><span class="inv-key">Engineering + Platform</span><span class="inv-val">₦60M</span></div>
+      <div class="inv-row"><span class="inv-key">Operations + Reserve</span><span class="inv-val">₦48M</span></div>
+      <div class="inv-row"><span class="inv-key">Total</span><span class="inv-val gold">~₦320M</span></div>
+    </div>
+  </div>
+
+  <div class="reveal" style="margin-top:40px;text-align:center">
+    <a href="mailto:auraa.hq@gmail.com?subject=AURAA Investor Inquiry" class="btn-primary" style="display:inline-block;background:var(--green);color:var(--cream)">Request Investor Pack →</a>
+    <p style="margin-top:16px;font-size:0.75rem;color:var(--text-muted)">Pitch deck, cap table, and SAFE term sheet sent within 24 hours</p>
+  </div>
+</section>
+
+<section class="waitlist" id="waitlist">
+  <div style="position:relative;z-index:2">
+    <div class="section-label" style="justify-content:center;color:rgba(245,240,232,0.6)">
+      <span style="background:rgba(245,240,232,0.6);width:30px;height:1px;display:inline-block"></span>
+      Join the Movement
+    </div>
+    <h2 class="section-title" style="color:var(--cream)">
+      Be first.<br/><em style="color:var(--gold)">Founding access</em><br/>is limited.
+    </h2>
+    <p class="section-body">Whether you're a vehicle owner who wants passive income, a driver ready for structured work, or a rider who's done with the anxiety of unvetted transport — AURAA was built for you.</p>
+    <div class="waitlist-form">
+      <input class="waitlist-input" type="text" id="wlName" placeholder="Your name" autocomplete="name"/>
+      <input class="waitlist-input" type="email" id="wlEmail" placeholder="Email address" autocomplete="email"/>
+      <select class="waitlist-select" id="wlRole">
+        <option value="">I am a...</option>
+        <option value="rider">Rider</option>
+        <option value="driver">Driver</option>
+        <option value="owner">Vehicle Owner</option>
+        <option value="corporate">Corporate / Organisation</option>
+        <option value="investor">Investor</option>
+      </select>
+      <button class="waitlist-btn" onclick="submitWaitlist()">Join Now →</button>
+    </div>
+    <div class="success-msg" id="successMsg">
+      You're on the list. We'll be in touch soon. Relax — we've got this.
+    </div>
+    <p class="waitlist-note">Founding Vehicle Access · 500 slots · SmartCam priority</p>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-top">
+    <div class="footer-brand">
+      <span class="logo">AURAA</span>
+      <p>Vehicle-centric mobility infrastructure for Lagos and beyond.</p>
+      <div class="footer-tagline">"Relax. We've got this."</div>
+    </div>
+    <div class="footer-links">
+      <h4>Platform</h4>
+      <ul>
+        <li><a href="#services">AURAA GO</a></li>
+        <li><a href="#services">AURAA ASSIST</a></li>
+        <li><a href="#services">AURAA SKATE</a></li>
+        <li><a href="#services">AURAA BIKE</a></li>
+      </ul>
+    </div>
+    <div class="footer-links">
+      <h4>Company</h4>
+      <ul>
+        <li><a href="#traction">Traction</a></li>
+        <li><a href="#investors">Investors</a></li>
+        <li><a href="https://app.auraahq.com" target="_blank">Open App</a></li>
+        <li><a href="mailto:auraa.hq@gmail.com">Contact Us</a></li>
+      </ul>
+    </div>
+    <div class="footer-links">
+      <h4>Contact</h4>
+      <ul>
+        <li><a href="mailto:auraa.hq@gmail.com">auraa.hq@gmail.com</a></li>
+        <li><a href="tel:+2348027641047">+234 802 764 1047</a></li>
+        <li><a href="#waitlist">Join Waitlist</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2026 AURAA Technologies Limited. All rights reserved.</p>
+    <span class="footer-rc">RC 9058278 · Incorporated December 2025 · Lagos, Nigeria</span>
+  </div>
+</footer>
+
 <script>
-// SUPABASE CONFIG (Your actual keys)
-const supabaseUrl = 'https://yroffdxgkppmqngybboj.supabase.co';
-const supabaseKey = 'sb_publishable_OcRlo6xhsrvzSWCG5dGkoA_AYqt-fdh';
-const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
-
-function switchTab(id, el) {
-    document.querySelectorAll('.form-section').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    el.classList.add('active');
-}
-
-async function processSync(role) {
-    showToast(`BROADCASTING ${role.toUpperCase()} SIGNAL...`);
-    
-    // Send to Supabase
-    const { error } = await _supabase
-        .from('trips')
-        .insert([{ 
-            origin: "MVP_PORTAL", 
-            destination: role, 
-            status: 'onboarding_active' 
-        }]);
-
-    if (!error) {
-        showToast(`${role} DATA SYNCED TO NETWORK`);
-    } else {
-        showToast("NETWORK ERROR: CHECK SUPABASE");
+// Scroll reveal
+const reveals = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => e.target.classList.add('visible'), i * 80);
     }
+  });
+}, { threshold: 0.1 });
+reveals.forEach(r => observer.observe(r));
+
+// Nav scroll effect
+window.addEventListener('scroll', () => {
+  const nav = document.getElementById('nav');
+  if (window.scrollY > 60) {
+    nav.style.padding = '14px 5vw';
+  } else {
+    nav.style.padding = '20px 5vw';
+  }
+});
+
+// Mobile menu
+function toggleMenu() {
+  const m = document.getElementById('mobileMenu');
+  m.classList.toggle('open');
 }
 
-function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.display = 'block';
-    setTimeout(() => t.style.display = 'none', 3500);
+// Waitlist submit
+function submitWaitlist() {
+  const name = document.getElementById('wlName').value.trim();
+  const email = document.getElementById('wlEmail').value.trim();
+  const role = document.getElementById('wlRole').value;
+  if (!name || !email || !role) {
+    alert('Please fill in all fields before joining.');
+    return;
+  }
+  // Store locally and show success
+  const entries = JSON.parse(localStorage.getItem('auraa_waitlist') || '[]');
+  entries.push({ name, email, role, ts: new Date().toISOString() });
+  localStorage.setItem('auraa_waitlist', JSON.stringify(entries));
+
+  document.querySelector('.waitlist-form').style.display = 'none';
+  document.getElementById('successMsg').style.display = 'block';
 }
-
-// Listen for cross-device signals
-_supabase.channel('public:trips').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trips' }, payload => {
-    showToast("📡 REMOTE SIGNAL: Incoming Request");
-}).subscribe();
-
 </script>
 </body>
 </html>
