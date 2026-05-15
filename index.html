@@ -4,44 +4,109 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>AURAA MVP — Service Portal</title>
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Outfit:wght@300;400;500;600&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet"/>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://checkout.flutterwave.com/v3.js"></script>
 
     <style>
+        /* RESTORING YOUR ORIGINAL v11.4.1 STYLING */
         :root {
             --green: #0a5c36;
             --green-light: #0e7a49;
             --gold: #c9a84c;
             --bg: #fdfdfb;
+            --glass: rgba(255, 255, 255, 0.9);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Outfit', sans-serif; background-color: var(--bg); color: #1a1a1a; padding: 20px; }
+        body { 
+            font-family: 'Outfit', sans-serif; 
+            background: linear-gradient(135deg, #fdfdfb 0%, #f4f7f5 100%); 
+            color: #1a1a1a; 
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
         
-        .app-container { max-width: 480px; margin: 0 auto; background: white; border-radius: 28px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.04); min-height: 90vh; display: flex; flex-direction: column; }
+        .app-container { 
+            width: 100%;
+            max-width: 440px; 
+            background: var(--glass); 
+            backdrop-filter: blur(10px);
+            border-radius: 32px; 
+            padding: 32px; 
+            box-shadow: 0 20px 60px rgba(10, 92, 54, 0.08);
+            border: 1px solid rgba(255,255,255,0.8);
+        }
         
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
-        .logo { font-family: 'Syne', sans-serif; font-weight: 800; color: var(--green); font-size: 24px; }
-        .wallet-pill { background: #f4f7f5; padding: 8px 16px; border-radius: 100px; display: flex; align-items: center; gap: 8px; }
-        .balance { font-weight: 600; color: var(--green); }
+        .logo { font-family: 'Syne', sans-serif; font-weight: 800; color: var(--green); font-size: 26px; letter-spacing: -1px; }
+        
+        .wallet-pill { 
+            background: white; 
+            padding: 10px 18px; 
+            border-radius: 100px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: flex-end;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        }
+        .balance { font-weight: 700; color: var(--green); font-size: 16px; }
 
-        .booking-card { flex-grow: 1; }
-        .input-group { margin-bottom: 20px; }
-        label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 8px; font-weight: 600; }
-        input { width: 100%; padding: 16px; border: 1.5px solid #f0f0f0; border-radius: 14px; font-family: inherit; font-size: 16px; outline: none; }
-        input:focus { border-color: var(--green); }
+        h2 { font-family: 'Cormorant Garamond', serif; font-size: 28px; margin-bottom: 24px; color: var(--green); }
 
-        .btn-main { width: 100%; padding: 18px; background: var(--green); color: white; border: none; border-radius: 16px; font-weight: 600; font-size: 16px; cursor: pointer; transition: 0.3s; margin-top: 10px; }
-        .btn-main:hover { background: var(--green-light); transform: translateY(-1px); }
+        .input-group { margin-bottom: 20px; position: relative; }
+        label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: #888; margin-bottom: 8px; font-weight: 600; }
+        input { 
+            width: 100%; 
+            padding: 18px; 
+            border: 1.5px solid #eee; 
+            border-radius: 16px; 
+            font-family: inherit; 
+            font-size: 16px; 
+            outline: none; 
+            transition: all 0.3s ease;
+            background: white;
+        }
+        input:focus { border-color: var(--green); box-shadow: 0 0 0 4px rgba(10, 92, 54, 0.05); }
 
-        /* Infrastructure Partners Section */
-        .partners-footer { margin-top: auto; padding-top: 30px; border-top: 1px solid #f0f0f0; text-align: center; }
-        .partner-label { font-size: 11px; color: #bbb; letter-spacing: 1.5px; margin-bottom: 15px; }
+        .btn-main { 
+            width: 100%; 
+            padding: 20px; 
+            background: var(--green); 
+            color: white; 
+            border: none; 
+            border-radius: 18px; 
+            font-weight: 600; 
+            font-size: 17px; 
+            cursor: pointer; 
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            margin-top: 10px;
+            box-shadow: 0 10px 20px rgba(10, 92, 54, 0.2);
+        }
+        .btn-main:hover { background: var(--green-light); transform: translateY(-2px); }
+        .btn-main:active { transform: scale(0.98); }
+
+        .partners-footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid #eee; }
         .partner-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .partner-chip { background: #fafafa; border: 1px dashed #ddd; padding: 10px; border-radius: 8px; font-size: 12px; color: #666; }
+        .partner-chip { 
+            background: rgba(255,255,255,0.5); 
+            border: 1px solid #eee; 
+            padding: 12px; 
+            border-radius: 12px; 
+            font-size: 12px; 
+            color: #666; 
+            text-align: center;
+            font-weight: 500;
+        }
 
-        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: white; padding: 14px 28px; border-radius: 12px; font-size: 14px; display: none; z-index: 9999; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        #toast { 
+            position: fixed; top: 30px; left: 50%; transform: translateX(-50%); 
+            background: #1a1a1a; color: white; padding: 16px 32px; 
+            border-radius: 100px; font-size: 14px; display: none; z-index: 9999; 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3); 
+        }
     </style>
 </head>
 <body>
@@ -52,25 +117,25 @@
     <div class="header">
         <div class="logo">AURAA</div>
         <div class="wallet-pill">
-            <span style="font-size: 12px; color: #666;">Wallet</span>
+            <span style="font-size: 10px; color: #999; font-weight: 600;">ACTIVE BALANCE</span>
             <span class="balance" id="display-balance">₦0.00</span>
         </div>
     </div>
 
     <div class="booking-card">
+        <h2>Request Activation</h2>
         <div class="input-group">
-            <label>Activation Point (Pickup)</label>
-            <input type="text" id="pickup" placeholder="Current location..."/>
+            <label>Pickup Location</label>
+            <input type="text" id="pickup" placeholder="Current address..."/>
         </div>
         <div class="input-group">
-            <label>Destination Node</label>
-            <input type="text" id="dropoff" placeholder="Where is the asset moving?"/>
+            <label>Destination</label>
+            <input type="text" id="dropoff" placeholder="Where to?"/>
         </div>
-        <button class="btn-main" onclick="handleNetworkRequest()">Request Vehicle Activation</button>
+        <button class="btn-main" onclick="handleRideRequest()">Request Vehicle</button>
     </div>
 
     <div class="partners-footer">
-        <div class="partner-label">NETWORK PARTNERS</div>
         <div class="partner-row">
             <div class="partner-chip">Insurance Partner</div>
             <div class="partner-chip">Telco Partner</div>
@@ -79,48 +144,50 @@
 </div>
 
 <script>
-// 1. SUPABASE CONFIG
+// 1. SUPABASE CONNECTION
 const supabaseUrl = 'https://yroffdxgkppmqngybboj.supabase.co';
 const supabaseKey = 'sb_publishable_OcRlo6xhsrvzSWCG5dGkoA_AYqt-fdh';
 const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-// 2. REAL-TIME NETWORK SYNC
-async function initAuraaSync() {
-    _supabase
-        .channel('public:trips')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trips' }, payload => {
-            showToast("📡 Network Sync: Activation sequence live.");
-        })
-        .subscribe();
+// 2. INITIALIZE SYNC
+async function initSync() {
+    _supabase.channel('public:trips').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trips' }, payload => {
+        showToast("📡 Network Alert: New Sync Received");
+    }).subscribe();
 }
 
-// 3. CORE LOGIC
-async function handleNetworkRequest() {
-    const pickup = document.getElementById('pickup').value;
-    const dropoff = document.getElementById('dropoff').value;
+// 3. FIXING THE BUTTON FLOW
+async function handleRideRequest() {
+    const from = document.getElementById('pickup').value;
+    const to = document.getElementById('dropoff').value;
 
-    if(!pickup || !dropoff) {
-        showToast("Please specify network nodes.");
+    if(!from || !to) {
+        showToast("Please fill in both locations.");
         return;
     }
 
-    showToast("Broadcasting to AURAA cloud...");
+    const btn = document.querySelector('.btn-main');
+    btn.textContent = "Broadcasting...";
+    btn.disabled = true;
 
-    // This writes to your Supabase "Filing Cabinet"
+    // Save to Cloud
     const { error } = await _supabase
         .from('trips')
         .insert([{ 
-            origin: pickup, 
-            destination: dropoff, 
+            origin: from, 
+            destination: to, 
             status: 'pending',
             price: 5000 
         }]);
 
     if (error) {
-        console.error(error);
-        showToast("Sync Error. Ensure Supabase table exists.");
+        showToast("Connection error. Try again.");
+        btn.textContent = "Request Vehicle";
+        btn.disabled = false;
     } else {
-        showToast("Success: Broadcast active on all devices.");
+        showToast("Success! Finding your pilot...");
+        // Here you can add your next page redirect or payment trigger
+        btn.textContent = "Vehicle Requested";
     }
 }
 
@@ -131,7 +198,7 @@ function showToast(msg) {
     setTimeout(() => t.style.display = 'none', 4000);
 }
 
-window.onload = initAuraaSync;
+window.onload = initSync;
 </script>
 
 </body>
