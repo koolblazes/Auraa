@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v11.4.1</title>
+<title>AURAA Technologies — MVP v11.5.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <!-- v11.2.2 — Rescue path for trapped pre-v11.2.1 users -->
 <!-- v11.3.0 — Flutterwave inline SDK + verified wallet funding -->
 <!-- v11.3.1 — LIVE Flutterwave keys activated -->
 <!-- v11.3.2 — Corrected live public key (prior key was 401 Unauthorized) -->
 <!-- v11.3.3 — Welcome modal now reads true global FU count from Supabase -->
-<!-- v11.4.1 — Rotated live key, real-money trip flow, server-verified wallet funding, honest button labels, split unification, no fraud surfaces -->
+<!-- v11.5.0 — Cross-device trip recognition via Supabase real-time writes -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://checkout.flutterwave.com/v3.js"></script>
 <style>
@@ -1267,6 +1267,85 @@ const FlutterwaveConfig = {
 };
 
 // ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+// TRIP SYNC — v11.5.0
+// Writes trips to Supabase trips table for cross-device recognition.
+// Falls back to localStorage-only if Supabase is unavailable.
+// ═══════════════════════════════════════════════
+const TripSync = (function(){
+  const URL = 'https://yroffdxgkppmqngybboj.supabase.co';
+  const KEY = 'sb_publishable_OcRlo6xhsrvzSWCG5dGkoA_AYqt-fdh';
+  let _client = null;
+
+  function _getClient(){
+    if(_client) return _client;
+    if(typeof window.supabase === 'undefined' || !window.supabase.createClient) return null;
+    try { _client = window.supabase.createClient(URL, KEY); return _client; } catch(e){ return null; }
+  }
+
+  async function writeTrip(trip){
+    const c = _getClient();
+    if(!c){ console.warn('[TripSync] client not ready — localStorage only'); return null; }
+    const row = {
+      trip_id:      trip.id,
+      service_type: trip.svc,
+      pickup:       trip.from,
+      dropoff:      trip.to,
+      fare_amount:  trip.fare,
+      currency:     'NGN',
+      rider_name:   trip.riderName || 'Demo Rider',
+      rider_email:  trip.riderEmail || '',
+      status:       'searching',
+      payment_source: trip.paymentSource || 'wallet',
+      tx_ref:       trip.paymentMeta?.tx_ref || trip.id,
+      is_live:      true,
+      started_at:   new Date().toISOString()
+    };
+    const { data, error } = await c.from('trips').insert(row).select().single();
+    if(error){ console.error('[TripSync] write failed:', error); return null; }
+    console.log('[TripSync] ✅ trip written to Supabase:', data.id);
+    return data.id;
+  }
+
+  async function updateTrip(tripId, patch){
+    const c = _getClient();
+    if(!c) return;
+    const { error } = await c.from('trips').update(patch).eq('trip_id', tripId);
+    if(error) console.error('[TripSync] update failed:', error);
+    else console.log('[TripSync] ✅ trip updated:', tripId, patch);
+  }
+
+  async function fetchPendingTrips(){
+    const c = _getClient();
+    if(!c) return [];
+    const { data, error } = await c.from('trips')
+      .select('*')
+      .eq('status', 'searching')
+      .order('started_at', { ascending: false })
+      .limit(10);
+    if(error){ console.error('[TripSync] fetch failed:', error); return []; }
+    return data || [];
+  }
+
+  async function subscribeToTrips(onTrip){
+    const c = _getClient();
+    if(!c) return null;
+    const channel = c.channel('trips-channel')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'trips'
+      }, payload => {
+        console.log('[TripSync] 🔴 new trip received:', payload.new);
+        onTrip(payload.new);
+      })
+      .subscribe();
+    return channel;
+  }
+
+  return { writeTrip, updateTrip, fetchPendingTrips, subscribeToTrips };
+})();
+
 // SUPABASE INTEGRATION — v11.2.0
 //
 // Strategy: localStorage stays the local-instant source of truth (preserves
@@ -4275,6 +4354,15 @@ function _startTripFlow(fare, rider, paymentSource, paymentMeta){
   localStorage.setItem('auraa_live_trip', JSON.stringify(proofTrip));
   localStorage.setItem('auraa_proof_trip_status', 'searching');
 
+  // v11.5.0 — Write to Supabase for cross-device recognition
+  TripSync.writeTrip(proofTrip).then(supabaseId => {
+    if(supabaseId){
+      proofTrip._supabase_id = supabaseId;
+      localStorage.setItem('auraa_live_trip', JSON.stringify(proofTrip));
+      console.log('[AURAA] Trip written to Supabase — cross-device active');
+    }
+  });
+
   const sourceLabel = paymentSource === 'flutterwave' ? '🟢 LIVE · Card' : 'Wallet';
   logEvent({ action:'Trip Booked', tag:'active', detail:`${svcLabel(S.service)} · ${pickup} → ${dropoff} · ₦${fare.toLocaleString()} · ${sourceLabel}`, role:'rider', meta:{tripId, paymentSource} });
   logTx({
@@ -4574,6 +4662,33 @@ function renderDriverTrips(){
   const proofStatus=localStorage.getItem('auraa_proof_trip_status')||'';
   const showProof=liveTrip && (proofStatus==='active'||proofStatus==='searching') && proofStatus!=='completed' && proofStatus!=='accepted';
 
+  // v11.5.0 — Also fetch from Supabase for cross-device trips
+  TripSync.fetchPendingTrips().then(supabaseTrips => {
+    supabaseTrips.forEach(t => {
+      // If this trip isn't already in localStorage (came from another device), inject it
+      const existing = localStorage.getItem('auraa_live_trip');
+      if(!existing || JSON.parse(existing).id !== t.trip_id){
+        const crossDeviceTrip = {
+          id:          t.trip_id,
+          svc:         t.service_type,
+          from:        t.pickup,
+          to:          t.dropoff,
+          fare:        t.fare_amount,
+          status:      'searching',
+          riderName:   t.rider_name,
+          riderEmail:  t.rider_email,
+          time:        new Date(t.started_at).toLocaleString(),
+          ownerAuth:   t.service_type === 'ASSIST',
+          paymentSource: t.payment_source,
+          _from_supabase: true
+        };
+        localStorage.setItem('auraa_live_trip', JSON.stringify(crossDeviceTrip));
+        localStorage.setItem('auraa_proof_trip_status', 'searching');
+        renderDriverTrips(); // re-render with the cross-device trip
+      }
+    });
+  });
+
   // ── FILTER JOBS BY DRIVER TYPE ────────────────────────────────────
   // Default to Emeka (assist + car) so Owner's Assist requests show up in the driver dashboard.
   // In production this comes from auth.
@@ -4707,6 +4822,12 @@ function acceptProofTrip(){
   liveTrip.acceptedAt=new Date().toLocaleString();
   localStorage.setItem('auraa_live_trip',JSON.stringify(liveTrip));
   localStorage.setItem('auraa_proof_trip_status','accepted');
+
+  // v11.5.0 — Update Supabase record
+  TripSync.updateTrip(liveTrip.id, {
+    status: 'accepted',
+    accepted_at: new Date().toISOString()
+  });
   S.driverWallet+=liveTrip.fare;
   localStorage.setItem('auraa_driver_wallet', S.driverWallet);
   logTx({title:`AURAA ${liveTrip.svc} — ${liveTrip.from} → ${liveTrip.to}`,amount:liveTrip.fare,type:'credit'});
@@ -4749,6 +4870,25 @@ function completeProofTrip(){
   // Clear live keys so Driver queue is fresh for the next booking
   localStorage.removeItem('auraa_live_trip');
   localStorage.removeItem('auraa_proof_trip_status');
+
+  // v11.5.0 — Complete the Supabase record with split data
+  const fare = liveTrip.fare || 0;
+  const svc  = liveTrip.svc || 'GO';
+  const splits = {
+    GO:     { driver:0.55, owner:0.25, platform:0.20 },
+    ASSIST: { driver:0.50, owner:0.30, platform:0.20 },
+    SKATE:  { driver:0.75, owner:0,    platform:0.25 },
+    BIKE:   { driver:0.65, owner:0.15, platform:0.20 }
+  }[svc] || { driver:0.55, owner:0.25, platform:0.20 };
+
+  TripSync.updateTrip(liveTrip.id, {
+    status:          'completed',
+    completed_at:    new Date().toISOString(),
+    driver_payout:   Math.round(fare * splits.driver),
+    owner_payout:    Math.round(fare * splits.owner),
+    platform_fee:    Math.round(fare * splits.platform),
+    duration_minutes: 15
+  });
   showToast('🏁 Trip completed! Earnings confirmed.');
   const mc=document.getElementById('mainContent');
   mc.innerHTML=`
