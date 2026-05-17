@@ -1287,32 +1287,35 @@ const TripSync = (function(){
     const c = _getClient();
     if(!c){ console.warn('[TripSync] client not ready — localStorage only'); return null; }
     const row = {
-      trip_id:      trip.id,
-      service_type: trip.svc,
-      pickup:       trip.from,
-      dropoff:      trip.to,
-      fare_amount:  trip.fare,
-      currency:     'NGN',
-      rider_name:   trip.riderName || 'Demo Rider',
-      rider_email:  trip.riderEmail || '',
-      status:       'searching',
-      payment_source: trip.paymentSource || 'wallet',
-      tx_ref:       trip.paymentMeta?.tx_ref || trip.id,
-      is_live:      true,
-      started_at:   new Date().toISOString()
+      rider_id:    trip.riderEmail || 'sim-rider',
+      driver_id:   null,
+      status:      'searching',
+      origin:      trip.from,
+      destination: trip.to,
+      price:       trip.fare
     };
     const { data, error } = await c.from('trips').insert(row).select().single();
     if(error){ console.error('[TripSync] write failed:', error); return null; }
     console.log('[TripSync] ✅ trip written to Supabase:', data.id);
+    // Store the UUID so we can update it later
+    trip._supabase_uuid = data.id;
     return data.id;
   }
 
   async function updateTrip(tripId, patch){
     const c = _getClient();
     if(!c) return;
-    const { error } = await c.from('trips').update(patch).eq('trip_id', tripId);
+    // Map our patch keys to existing schema
+    const mapped = {};
+    if(patch.status)       mapped.status    = patch.status;
+    if(patch.driver_id)    mapped.driver_id = patch.driver_id;
+    // Use the Supabase UUID stored on the trip object
+    const liveTrip = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
+    const uuid = liveTrip?._supabase_uuid;
+    if(!uuid){ console.warn('[TripSync] no supabase UUID to update'); return; }
+    const { error } = await c.from('trips').update(mapped).eq('id', uuid);
     if(error) console.error('[TripSync] update failed:', error);
-    else console.log('[TripSync] ✅ trip updated:', tripId, patch);
+    else console.log('[TripSync] ✅ trip updated:', uuid, mapped);
   }
 
   async function fetchPendingTrips(){
@@ -1321,7 +1324,7 @@ const TripSync = (function(){
     const { data, error } = await c.from('trips')
       .select('*')
       .eq('status', 'searching')
-      .order('started_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(10);
     if(error){ console.error('[TripSync] fetch failed:', error); return []; }
     return data || [];
@@ -4665,26 +4668,27 @@ function renderDriverTrips(){
   // v11.5.0 — Also fetch from Supabase for cross-device trips
   TripSync.fetchPendingTrips().then(supabaseTrips => {
     supabaseTrips.forEach(t => {
-      // If this trip isn't already in localStorage (came from another device), inject it
-      const existing = localStorage.getItem('auraa_live_trip');
-      if(!existing || JSON.parse(existing).id !== t.trip_id){
+      const existing = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
+      const existingUUID = existing?._supabase_uuid;
+      if(!existingUUID || existingUUID !== t.id){
         const crossDeviceTrip = {
-          id:          t.trip_id,
-          svc:         t.service_type,
-          from:        t.pickup,
-          to:          t.dropoff,
-          fare:        t.fare_amount,
-          status:      'searching',
-          riderName:   t.rider_name,
-          riderEmail:  t.rider_email,
-          time:        new Date(t.started_at).toLocaleString(),
-          ownerAuth:   t.service_type === 'ASSIST',
-          paymentSource: t.payment_source,
-          _from_supabase: true
+          id:             'PROOF-' + t.id,
+          svc:            'GO',
+          from:           t.origin,
+          to:             t.destination,
+          fare:           parseFloat(t.price) || 3500,
+          status:         'searching',
+          riderName:      t.rider_id || 'Rider',
+          riderEmail:     t.rider_id || '',
+          time:           new Date(t.created_at).toLocaleString(),
+          ownerAuth:      false,
+          paymentSource:  'wallet',
+          _from_supabase: true,
+          _supabase_uuid: t.id
         };
         localStorage.setItem('auraa_live_trip', JSON.stringify(crossDeviceTrip));
         localStorage.setItem('auraa_proof_trip_status', 'searching');
-        renderDriverTrips(); // re-render with the cross-device trip
+        renderDriverTrips();
       }
     });
   });
@@ -4882,12 +4886,8 @@ function completeProofTrip(){
   }[svc] || { driver:0.55, owner:0.25, platform:0.20 };
 
   TripSync.updateTrip(liveTrip.id, {
-    status:          'completed',
-    completed_at:    new Date().toISOString(),
-    driver_payout:   Math.round(fare * splits.driver),
-    owner_payout:    Math.round(fare * splits.owner),
-    platform_fee:    Math.round(fare * splits.platform),
-    duration_minutes: 15
+    status: 'completed',
+    driver_id: 'sim-driver'
   });
   showToast('🏁 Trip completed! Earnings confirmed.');
   const mc=document.getElementById('mainContent');
