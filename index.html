@@ -3796,6 +3796,24 @@ function getApproxDistance(from, to) {
   return AREA_DISTANCES[key1] || AREA_DISTANCES[key2] || 8;
 }
 
+// v11.8.0 — Real distance from GPS coordinates (haversine) when available.
+// Was: getApproxDistance defaulted unknown area pairs to a flat 8km, so long
+// trips (Lekki→Ikeja) and short trips alike all quoted 8km. Now we measure.
+function haversineKm(aLat, aLng, bLat, bLng){
+  const R = 6371, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(bLat - aLat), dLng = toRad(bLng - aLng);
+  const s = Math.sin(dLat/2)**2 + Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+function tripDistanceKm(pickup, dropoff){
+  if (pickup && dropoff && pickup.lat != null && pickup.lng != null && dropoff.lat != null && dropoff.lng != null){
+    const straight = haversineKm(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
+    return Math.max(1, Math.round(straight * 1.3)); // 1.3 = Lagos road-winding factor
+  }
+  // No coordinates (manually typed location) — fall back to the area table.
+  return getApproxDistance(pickup && pickup.area || '', dropoff && dropoff.area || '');
+}
+
 // Location state (declared at top of script for logout() safety)
 // LS = { pickup, dropoff, recent, activeField, focusIdx }
 
@@ -4182,7 +4200,7 @@ function calcFare(){
     if(match) LS.dropoff=match;
     else LS.dropoff={name:dropoffVal,area:dropoffVal,street:'',type:'manual',icon:'📍',lat:null,lng:null};
   }
-  const distKm = getApproxDistance(LS.pickup.area, LS.dropoff.area);
+  const distKm = tripDistanceKm(LS.pickup, LS.dropoff);
   // Simulate realistic Lagos traffic duration: avg 4 min/km off-peak, 7 min/km peak
   const surge = getSurgeMultiplier();
   const minPerKm = surge > 1 ? 7 : 4;
