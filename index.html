@@ -4145,8 +4145,11 @@ const PRICING = {
 };
 
 function getSurgeMultiplier() {
-  const hour = new Date().getHours();
-  if ((hour >= 7 && hour <= 10) || (hour >= 16 && hour <= 21)) return 1.5;
+  // v11.8.0 — Surge disabled. AURAA's model is transparent, predictable fares;
+  // surge contradicts that and isn't operationally needed at this stage.
+  // (Peak-window logic kept below, commented, for possible reintroduction at scale.)
+  // const hour = new Date().getHours();
+  // if ((hour >= 7 && hour <= 10) || (hour >= 16 && hour <= 21)) return 1.5;
   return 1.0;
 }
 
@@ -4189,7 +4192,7 @@ function calcFare(){
   // Simulate realistic Lagos traffic duration: avg 4 min/km off-peak, 7 min/km peak
   const surge = getSurgeMultiplier();
   const minPerKm = surge > 1 ? 7 : 4;
-  const durationMin = Math.round(distKm * minPerKm + Math.random() * 5);
+  const durationMin = Math.max(1, Math.round(distKm * 3)); // v11.8.0 — deterministic (~3 min/km). Was distKm*minPerKm + random, which made fares jump and inflated 8km to ~58min.
   const f = computeFare(S.service, distKm, durationMin);
   const _me = IdentityStore.current();
   const _bikeOwnership = _me?.bike_ownership || Onboarding.owners().find(o=>o.email===_me?.email)?.bike_ownership || 'self';
