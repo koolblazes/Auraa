@@ -4059,7 +4059,7 @@ function renderBook(){
         </div>
         <div class="svc-tile-name">Bike</div>
       </div>
-      <div class="svc-tile" onclick="showToast('Bicycle service launching with bicycle riders onboard.')">
+      <div class="svc-tile${S.service==='bicycle'?' active':''}" onclick="setService('bicycle')">
         <div class="svc-tile-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="5.5" cy="17.5" r="3"/><circle cx="18.5" cy="17.5" r="3"/>
@@ -4077,14 +4077,6 @@ function renderBook(){
         </div>
         <div class="svc-tile-name">Skate</div>
       </div>
-      <div class="svc-tile" onclick="showToast('Fix-it requests run from the Fix-it tab — available to drivers, owners, and bikers.')">
-        <div class="svc-tile-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#c9a84c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a1.4 1.4 0 0 0 2 2l6-6a4 4 0 0 0 5.4-5.4l-2.3 2.3-2.4-.6-.6-2.4z"/>
-          </svg>
-        </div>
-        <div class="svc-tile-name">Fix-it</div>
-      </div>
     </div>
   </div>
   <div class="card">
@@ -4093,7 +4085,7 @@ function renderBook(){
     </div>
     <div class="card-title">Select Service</div>
     <div class="service-pills" id="pills">
-      ${['go','skate','bike'].map(s=>`<div class="pill${S.service===s?' active':''}" onclick="setService('${s}')">${svcLabel(s)}</div>`).join('')}
+      ${['go','skate','bike','bicycle'].map(s=>`<div class="pill${S.service===s?' active':''}" onclick="setService('${s}')">${svcLabel(s)}</div>`).join('')}
     </div>
     <div id="svcDesc" class="slide-body" style="margin-bottom:1rem;">${svcDesc(S.service)}</div>
     ${buildLocField('pickup','PICKUP LOCATION', LS.pickup ? LS.pickup.name : '')}
@@ -4116,13 +4108,14 @@ function renderBook(){
   }
 }
 
-function svcLabel(s){return{assist:'ASSIST',go:'GO',skate:'SKATE',bike:'BIKE',fix:'FIX-IT'}[s]||s;}
+function svcLabel(s){return{assist:'ASSIST',go:'GO',skate:'SKATE',bike:'BIKE',bicycle:'BICYCLE',fix:'FIX-IT'}[s]||s;}
 function svcDesc(s){
   return{
     assist:'<strong>AURAA ASSIST</strong> — A professional driver dispatched to operate <em>your own vehicle</em>. Our global exclusive.',
     go:'<strong>AURAA GO</strong> — Standard ride-hailing. Hop in a verified AURAA vehicle.',
     skate:'<strong>AURAA SKATE</strong> — Inline skater dispatch for last-mile urban mobility.',
     bike:'<strong>AURAA BIKE</strong> — Motorcycle dispatch for fast, affordable trips.',
+    bicycle:'<strong>AURAA BICYCLE</strong> — Bicycle dispatch for short, eco-friendly last-mile hops.',
     fix:'<strong>FIX-IT NETWORK</strong> — On-demand roadside assistance &amp; vehicle repair.',
   }[s]||'';
 }
@@ -4141,6 +4134,7 @@ const PRICING = {
   assist:{ baseFare:2000, perKm:220, perMin:40, minFare:4500 },
   skate: { baseFare:600,  perKm:100, perMin:20, minFare:1500 },
   bike:  { baseFare:500,  perKm:90,  perMin:15, minFare:1200 },
+  bicycle:{ baseFare:400, perKm:70,  perMin:15, minFare:1000 },
   fix:   { baseFare:3000, perKm:0,   perMin:0,  minFare:3000 },
 };
 
