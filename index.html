@@ -1141,6 +1141,7 @@ const S = {
   riderWallet: 42500,
   driverWallet: 48000,
   ownerWallet: 16200,
+  platformWallet: parseInt(localStorage.getItem('auraa_platform_wallet')||'0'),
   logoTaps: 0,
   logoTapTimer: null,
   visitCount: parseInt(localStorage.getItem('auraa_visits')||'0') + 1,
@@ -1346,7 +1347,26 @@ const TripSync = (function(){
     return channel;
   }
 
-  return { writeTrip, updateTrip, fetchPendingTrips, subscribeToTrips };
+  async function writeSettlement(tripId, svc, legs){
+    const c = _getClient();
+    if(!c){ console.warn('[TripSync] client not ready — settlement local only'); return false; }
+    const rows = legs.map(l=>({
+      trip_id: String(tripId||''),
+      party:   l.role,
+      label:   l.l,
+      amount:  l.v,
+      pct:     l.pct,
+      service: svc
+    }));
+    try {
+      const { error } = await c.from('wallet_transactions').insert(rows);
+      if(error){ console.error('[TripSync] settlement write failed:', error); return false; }
+      console.log('[TripSync] ✅ settlement ledgered:', rows.length, 'legs');
+      return true;
+    } catch(e){ console.error('[TripSync] settlement exception:', e); return false; }
+  }
+
+  return { writeTrip, updateTrip, fetchPendingTrips, subscribeToTrips, writeSettlement };
 })();
 
 // SUPABASE INTEGRATION — v11.2.0
@@ -4226,6 +4246,59 @@ function getSplits(svc,fare,ctx){
   return (m[svc]||m.go).map(([l,p])=>({l,v:Math.round(fare*p)}));
 }
 
+// ═══════════════════════════════════════════════
+// SETTLEMENT — v11.8.0
+// One real fare, divided per the locked percentages, credited to each party's
+// wallet by their SHARE (not the whole fare), and persisted to the Supabase
+// wallet_transactions ledger. getSplits() is the ONLY split table.
+// Insurance & telco remain inside the Platform share (no separate line).
+// ═══════════════════════════════════════════════
+function classifyParty(label){
+  if(/owner/i.test(label))    return 'owner';
+  if(/platform/i.test(label)) return 'platform';
+  return 'driver'; // Driver / Biker / Skater / Cyclist
+}
+
+function settleTrip(liveTrip){
+  const fare   = liveTrip.fare || 0;
+  const svcKey = String(liveTrip.svc || 'go').toLowerCase();
+  const _me    = IdentityStore.current();
+  const bikeOwnership = _me?.bike_ownership
+    || (typeof Onboarding!=='undefined' && Onboarding.owners?.().find(o=>o.email===_me?.email)?.bike_ownership)
+    || 'self';
+
+  // Single source of truth.
+  const parts = getSplits(svcKey, fare, {bikeOwnership});
+
+  const legs = parts.map(p=>({
+    l: p.l,
+    v: p.v,
+    role: classifyParty(p.l),
+    pct: fare ? Math.round((p.v / fare) * 100) : 0
+  }));
+
+  // Credit each party their share — not the whole fare.
+  legs.forEach(leg=>{
+    if(leg.role==='owner'){
+      S.ownerWallet += leg.v;
+      localStorage.setItem('auraa_owner_wallet', S.ownerWallet);
+    } else if(leg.role==='platform'){
+      S.platformWallet += leg.v;
+      localStorage.setItem('auraa_platform_wallet', S.platformWallet);
+    } else {
+      S.driverWallet += leg.v;
+      localStorage.setItem('auraa_driver_wallet', S.driverWallet);
+    }
+    logTx({title:`${leg.l} — ${liveTrip.svc} ${liveTrip.from} → ${liveTrip.to}`, amount:leg.v, type:'credit'});
+  });
+
+  // Persist the split to the Supabase ledger (non-blocking; local credit already applied).
+  const ledgerId = liveTrip._supabase_uuid || liveTrip.id;
+  TripSync.writeSettlement(ledgerId, liveTrip.svc, legs);
+
+  return legs;
+}
+
 function bookTrip(fare){
   // v10.6 — Soft Founding User gate before proof trip
   if(!IdentityStore.isKnown()){
@@ -4832,10 +4905,9 @@ function acceptProofTrip(){
     status: 'accepted',
     accepted_at: new Date().toISOString()
   });
-  S.driverWallet+=liveTrip.fare;
-  localStorage.setItem('auraa_driver_wallet', S.driverWallet);
-  logTx({title:`AURAA ${liveTrip.svc} — ${liveTrip.from} → ${liveTrip.to}`,amount:liveTrip.fare,type:'credit'});
-  showToast(`✅ Trip accepted! Earned ₦${liveTrip.fare.toLocaleString()}`);
+  // v11.8.0 — No money moves on acceptance. Settlement happens at completion,
+  // split across parties via settleTrip(). (Was: credited driver the FULL fare.)
+  showToast(`✅ Trip accepted — ${liveTrip.from} → ${liveTrip.to}`);
   // Show in-progress state for driver
   const mc=document.getElementById('mainContent');
   mc.innerHTML=`
@@ -4875,21 +4947,16 @@ function completeProofTrip(){
   localStorage.removeItem('auraa_live_trip');
   localStorage.removeItem('auraa_proof_trip_status');
 
-  // v11.5.0 — Complete the Supabase record with split data
-  const fare = liveTrip.fare || 0;
-  const svc  = liveTrip.svc || 'GO';
-  const splits = {
-    GO:     { driver:0.55, owner:0.25, platform:0.20 },
-    ASSIST: { driver:0.50, owner:0.30, platform:0.20 },
-    SKATE:  { driver:0.75, owner:0,    platform:0.25 },
-    BIKE:   { driver:0.65, owner:0.15, platform:0.20 }
-  }[svc] || { driver:0.55, owner:0.25, platform:0.20 };
+  // v11.8.0 — Real split settlement. Single source of truth = getSplits().
+  // (Removed the duplicate split map that disagreed with getSplits:
+  //  it had SKATE 75/25 and BIKE 65/15/20, contradicting 80/20 and 80/20-or-60/20/20.)
+  const legs = settleTrip(liveTrip);
 
   TripSync.updateTrip(liveTrip.id, {
     status: 'completed',
     driver_id: 'sim-driver'
   });
-  showToast('🏁 Trip completed! Earnings confirmed.');
+  showToast('🏁 Trip completed! Settled across parties.');
   const mc=document.getElementById('mainContent');
   mc.innerHTML=`
   <div class="card" style="text-align:center;padding:2rem 1rem;border-color:var(--success);">
@@ -4897,7 +4964,10 @@ function completeProofTrip(){
     <div style="font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:800;color:var(--success);margin-bottom:.5rem;">Trip Completed</div>
     <div style="font-size:.82rem;color:var(--muted);margin-bottom:1.25rem;">${liveTrip.from} → ${liveTrip.to}</div>
     <div style="font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;color:var(--gold);">₦${liveTrip.fare.toLocaleString()}</div>
-    <div style="font-size:.72rem;color:var(--muted);margin-bottom:1.25rem;">Earnings credited to wallet</div>
+    <div style="font-size:.72rem;color:var(--muted);margin-bottom:.6rem;">Settled across parties</div>
+    <div style="background:var(--dark3);border-radius:10px;padding:.6rem .85rem;margin-bottom:1.25rem;text-align:left;">
+      ${legs.map(l=>`<div class="split-row"><span class="split-label">${l.l}</span><span class="split-val">₦${l.v.toLocaleString()}</span></div>`).join('')}
+    </div>
     <div style="background:var(--dark3);border-radius:10px;padding:.85rem;font-size:.75rem;text-align:left;line-height:1.9;margin-bottom:1rem;">
       <div>📋 <strong>Trip ID:</strong> ${liveTrip.id}</div>
       <div>🕐 <strong>Accepted:</strong> ${liveTrip.acceptedAt}</div>
@@ -4917,10 +4987,11 @@ function declineProofTrip(){
 
 function acceptTrip(id){
   const r=allPossibleTrips.find(x=>x.id===id);
-  S.driverWallet+=r.fare;
-  localStorage.setItem('auraa_driver_wallet', S.driverWallet);
-  logTx({title:`AURAA ${r.svc} — ${r.from} → ${r.to}`,amount:r.fare,type:'credit'});
-  showToast(`Trip accepted! Earned ₦${r.fare.toLocaleString()}`);
+  if(!r) return;
+  // v11.8.0 — settle through the single source of truth (was: full fare to driver).
+  const legs=settleTrip(r);
+  const drv=legs.find(l=>l.role==='driver');
+  showToast(`Trip accepted! Your share: ₦${(drv?drv.v:0).toLocaleString()}`);
   removeTrip(id, true);
 }
 
