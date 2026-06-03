@@ -4426,6 +4426,16 @@ function _startTripFlow(fare, rider, paymentSource, paymentMeta){
   const svc = S.service.toUpperCase();
   const tripId = 'PROOF-' + Date.now();
 
+  // v11.9.0 — Inherit the owner-approved pairing instead of hardcoded demo data.
+  // For ASSIST/GO the trust comes from a real pairing the owner set up. If none
+  // exists yet, fall back honestly to no owner-auth (a plain trip) rather than
+  // fabricating a "Toyota Camry / Demo Owner".
+  const _me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
+  const _pairing = (typeof PairingStore!=='undefined')
+      ? (PairingStore.activeFor(_me.fu_number) || PairingStore.list().find(p=>p.status==='active'))
+      : null;
+  const _usesOwnerVehicle = (svc === 'ASSIST' || svc === 'GO') && !!_pairing;
+
   const proofTrip = {
     id: tripId,
     svc,
@@ -4436,9 +4446,18 @@ function _startTripFlow(fare, rider, paymentSource, paymentMeta){
     riderName: rider?.name || 'Demo Rider',
     riderEmail: rider?.email || '—',
     time: new Date().toLocaleString(),
-    ownerAuth: svc === 'ASSIST',
-    owner: svc === 'ASSIST' ? 'Demo Owner' : null,
-    vehicle: svc === 'ASSIST' ? 'Toyota Camry • LAG-234-KA' : null,
+    ownerAuth: _usesOwnerVehicle,
+    owner: _usesOwnerVehicle ? _pairing.owner.name : null,
+    vehicle: _usesOwnerVehicle ? _pairing.vehicle : null,
+    plate: _usesOwnerVehicle ? _pairing.plate : null,
+    // Full pairing rides along so the rider card + owner monitor read one source.
+    pairing: _pairing || null,
+    driver: _pairing ? {
+      name: _pairing.driver.name,
+      fu_number: _pairing.driver.fu_number,
+      source: _pairing.driver.source,
+      trust: _pairing.trust
+    } : null,
     paymentSource,           // 'wallet' or 'flutterwave'
     paymentMeta: paymentMeta || null
   };
@@ -4514,11 +4533,21 @@ function renderTripActive(){
   </div>
   <div class="card">
     <div class="section-header">Your Driver</div>
-    <div style="display:flex;align-items:center;gap:.85rem;">
-      <div style="width:44px;height:44px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;">👨‍✈️</div>
-      <div><div style="font-weight:600;font-size:.9rem;">Emeka Okafor</div><div style="font-size:.72rem;color:var(--muted);">Toyota Camry • LAG-234-KA</div></div>
-      <div style="margin-left:auto;"><span class="badge badge-green">VERIFIED</span></div>
-    </div>
+    ${(()=>{
+      const _t=JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
+      const _d=_t&&_t.driver;
+      const _name=_d?_d.name:'Assigning…';
+      const _veh=_t&&_t.vehicle?[_t.vehicle,_t.plate].filter(Boolean).join(' • '):'';
+      const _badge=_d&&_d.trust==='self'?'<span class="badge badge-gold">Owner-driver</span>'
+        :_d&&_d.trust==='owner-approved'?'<span class="badge badge-green">✓ Owner-approved</span>'
+        :_d&&_d.trust==='onboarded'?'<span class="badge badge-green">✓ Onboarded</span>':'';
+      return `<div style="display:flex;align-items:center;gap:.85rem;">
+        <div style="width:44px;height:44px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;">👨‍✈️</div>
+        <div><div style="font-weight:600;font-size:.9rem;">${_name}</div>${_veh?`<div style="font-size:.72rem;color:var(--muted);">${_veh}</div>`:''}</div>
+        <div style="margin-left:auto;">${_badge}</div>
+      </div>
+      <div style="font-size:.62rem;color:var(--muted);margin-top:.5rem;">Full background &amp; medical verification activates at launch.</div>`;
+    })()}
   </div>`;
   if(S.progressTimer) clearInterval(S.progressTimer);
   S.progressTimer=setInterval(()=>{
@@ -4803,7 +4832,9 @@ function renderDriverTrips(){
   </div>
   <div class="card">
     <div class="card-title">Incoming Requests ${showProof||showing.length?`<span style="color:var(--gold)">(${(showProof?1:0)+showing.length})</span>`:''}
+    ${showing.length?`<span class="badge" style="background:var(--dark3);color:var(--muted);font-weight:600;font-size:.58rem;">SAMPLE</span>`:''}
     </div>
+    ${showing.length?`<div style="font-size:.62rem;color:var(--muted);margin:-.3rem 0 .6rem;">Sample requests illustrate the driver feed. Real trips you book appear here live.</div>`:''}
 
     ${showProof?`
     <div class="trip-request" id="tr_proof" style="border:2px solid var(--gold);background:rgba(201,168,76,.06);margin-bottom:1rem;position:relative;">
@@ -4819,9 +4850,27 @@ function renderDriverTrips(){
           <span class="trip-fare-tag">₦${liveTrip.fare.toLocaleString()}</span>
         </div>
         ${liveTrip.ownerAuth?`<div style="background:rgba(201,168,76,.07);border-radius:8px;padding:.4rem .65rem;margin-bottom:.5rem;font-size:.7rem;line-height:1.7;">
-          <div><span style="color:var(--muted);">Vehicle: </span><strong>${liveTrip.vehicle}</strong></div>
+          <div><span style="color:var(--muted);">Vehicle: </span><strong>${liveTrip.vehicle}</strong>${liveTrip.plate?` <span style="color:var(--muted);">·</span> <strong>${liveTrip.plate}</strong>`:''}</div>
           <div><span style="color:var(--muted);">Owner: </span><strong>${liveTrip.owner}</strong></div>
         </div>`:''}
+        ${liveTrip.driver?`<div style="background:var(--dark3);border-radius:8px;padding:.5rem .65rem;margin-bottom:.5rem;font-size:.72rem;line-height:1.7;">
+          <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;">
+            <span style="color:var(--muted);">Driver:</span> <strong>${liveTrip.driver.name}</strong>
+            ${liveTrip.driver.trust==='self'?`<span class="badge badge-gold">Owner-driver</span>`
+              :liveTrip.driver.trust==='owner-approved'?`<span class="badge badge-green">✓ Owner-approved</span>`
+              :liveTrip.driver.trust==='onboarded'?`<span class="badge badge-green">✓ Onboarded</span>`:''}
+          </div>
+          <div style="font-size:.64rem;color:var(--muted);margin-top:.15rem;">${
+            liveTrip.driver.trust==='self'
+              ? 'This driver owns the vehicle. Full verification activates at launch.'
+              : 'Approved by the vehicle&rsquo;s owner. Full background &amp; medical verification activates at launch.'
+          }</div>
+        </div>`:''}
+        <div style="display:flex;align-items:center;gap:.4rem;font-size:.7rem;margin-bottom:.5rem;">
+          <span class="badge badge-green">✓ Insured</span>
+          <span style="color:var(--muted);">This trip is covered, end to end.</span>
+        </div>
+        <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:.5rem;" onclick="shareTrip()">📍 Share my trip</button>
         <div class="trip-route">
           <div class="trip-from">FROM: <span>${liveTrip.from}</span></div>
           <div class="trip-to">TO: <span>${liveTrip.to}</span></div>
@@ -4907,18 +4956,58 @@ function removeTrip(id, accepted){
   },300);
 }
 
+// v11.9.0 — Rider safety: share live trip details with a trusted contact.
+// Uses the native share sheet where available, falls back to clipboard.
+function shareTrip(){
+  const t=JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
+  if(!t){ showToast('No active trip to share'); return; }
+  const lines=[
+    'I am on an AURAA trip.',
+    `From: ${t.from}`,
+    `To: ${t.to}`,
+    t.driver?`Driver: ${t.driver.name}`:'',
+    t.vehicle?`Vehicle: ${t.vehicle}${t.plate?' · '+t.plate:''}`:'',
+    `Ref: ${t.id}`,
+    'Track via AURAA — app.auraahq.com'
+  ].filter(Boolean);
+  const msg=lines.join('\n');
+  if(navigator.share){
+    navigator.share({title:'My AURAA trip',text:msg}).catch(()=>{});
+  } else if(navigator.clipboard){
+    navigator.clipboard.writeText(msg).then(()=>showToast('Trip details copied — paste to your contact'),()=>showToast('Could not copy'));
+  } else {
+    showToast('Sharing not supported on this device');
+  }
+}
+
 function acceptProofTrip(){
   const liveTrip=JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
   if(!liveTrip) return;
   liveTrip.status='accepted';
   liveTrip.acceptedAt=new Date().toLocaleString();
+
+  // v11.9.0 — The owner-approved pairing is the source of truth for who drives.
+  // If the trip already inherited a pairing driver at booking, keep it. Only if
+  // there's no pairing driver (e.g. a plain GO trip with no owner vehicle) do we
+  // fall back to the accepting driver's own identity. Honest fields only.
+  if(!liveTrip.driver){
+    const _drv = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
+    liveTrip.driver = {
+      name: _drv.name || 'Driver',
+      fu_number: _drv.fu_number || null,
+      source: 'accept',
+      trust: _drv.fu_number ? 'onboarded' : 'unregistered'
+    };
+  }
   localStorage.setItem('auraa_live_trip',JSON.stringify(liveTrip));
   localStorage.setItem('auraa_proof_trip_status','accepted');
 
   // v11.5.0 — Update Supabase record
   TripSync.updateTrip(liveTrip.id, {
     status: 'accepted',
-    accepted_at: new Date().toISOString()
+    accepted_at: new Date().toISOString(),
+    driver_name: liveTrip.driver.name,
+    driver_fu: liveTrip.driver.fu_number
   });
   // v11.8.0 — No money moves on acceptance. Settlement happens at completion,
   // split across parties via settleTrip(). (Was: credited driver the FULL fare.)
@@ -5073,6 +5162,70 @@ function renderDriverSchedule(){
 // OWNER
 // ═══════════════════════════════════════════════
 
+// ── LAGOS ZONES ───────────────────────────────────────────────────────────
+// v11.9.0 — Shared zone list. Used as a SEARCH FILTER (driver looking for
+// nearby available vehicles), NOT a stored driver preference. We deliberately
+// do not store a driver's "operating area" — that would create a false surge
+// toward high-demand zones and imply live geolocation we don't have yet.
+// Proximity is expressed honestly: the driver chooses an area to search in.
+const LAGOS_ZONES = [
+  'Victoria Island','Lekki Phase 1','Lekki Phase 2','Ikoyi','Ajah',
+  'Ikeja','Surulere','Yaba','Gbagada','Magodo','Other',
+];
+
+// ── PAIRING STORE ─────────────────────────────────────────────────────────
+// v11.9.0 — Single source of truth for who is approved to drive which vehicle.
+// The owner's approval IS the trust event. A trip inherits the active pairing;
+// the rider card and owner monitor both READ from this — neither fabricates
+// driver data. Three honest sources:
+//   'known'     — owner approves a specific person they already trust (manual)
+//   'proximity' — a driver found this available vehicle and the owner approved
+//   'self'      — owner-driver: owner drives their own vehicle (no third party)
+// trust is always 'owner-approved' (or 'self' for owner-drivers). We never
+// assert background/medical verification here — that is operational, at launch.
+const PairingStore = {
+  _key: 'auraa_pairings',
+  _all(){
+    try { return JSON.parse(localStorage.getItem(this._key)||'[]'); }
+    catch(e){ return []; }
+  },
+  _save(list){ localStorage.setItem(this._key, JSON.stringify(list)); },
+
+  // Create/replace an owner→driver pairing. Returns the pairing.
+  approve({ vehicle, plate, owner, driver, source }){
+    if(!owner || !driver) return null;
+    const pairing = {
+      id: 'PR-' + Date.now() + '-' + Math.random().toString(36).slice(2,6).toUpperCase(),
+      vehicle: vehicle || '',
+      plate:   plate   || '',
+      owner:  { name: owner.name || '',  fu_number: owner.fu_number  || null },
+      driver: { name: driver.name || '', fu_number: driver.fu_number || null,
+                source: source || 'known' },
+      trust:  source === 'self' ? 'self' : 'owner-approved',
+      approvedAt: new Date().toISOString(),
+      status: 'active',
+    };
+    const list = this._all().filter(p =>
+      !(p.owner.fu_number && p.owner.fu_number === pairing.owner.fu_number
+        && p.plate === pairing.plate)); // one active pairing per owner+vehicle
+    list.push(pairing);
+    this._save(list);
+    return pairing;
+  },
+
+  // The active pairing for a given owner+vehicle (or owner's first active one).
+  activeFor(ownerFu, plate){
+    return this._all().find(p =>
+      p.status==='active'
+      && p.owner.fu_number === ownerFu
+      && (!plate || p.plate === plate)) || null;
+  },
+
+  list(){ return this._all(); },
+  pause(id){ const l=this._all(); const p=l.find(x=>x.id===id); if(p){p.status='paused'; this._save(l);} },
+  remove(id){ this._save(this._all().filter(x=>x.id!==id)); },
+};
+
 // ── UNIFIED DRIVER SYSTEM ─────────────────────────────────────────────────
 const DRIVER_TYPES = {
   car:      { label:'Car Driver',     icon:'🚗', badge:'badge-green' },
@@ -5113,44 +5266,95 @@ let assistRequestActive=false;
 
 function renderOwnerMonitor(){
   const mc=document.getElementById('mainContent');
+
+  // v11.9.0 — Bind to reality. The monitor shows the owner's paired vehicle and,
+  // when a trip is genuinely active, the real driver + route. Telematics tiles
+  // (speed, geofence, deviation, live map) require Airtel M2M, which is not yet
+  // live — so they are shown as DESIGN, labelled "activating at launch", never
+  // populated with fabricated values. No fake deviation timer.
+  const me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
+  const pairing = (typeof PairingStore!=='undefined')
+      ? (PairingStore.activeFor(me.fu_number) || PairingStore.list().find(p=>p.status==='active'))
+      : null;
+  const trip = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
+  const tripActive = trip && ['searching','accepted','active'].includes(trip.status)
+      && (trip.ownerAuth || (pairing && trip.pairing && trip.pairing.id===pairing.id));
+
+  // No pairing yet → honest prompt to pair, not a fake live trip.
+  if(!pairing){
+    mc.innerHTML=`
+    <div class="card" style="text-align:center;padding:1.5rem 1rem;">
+      <div style="font-size:2rem;margin-bottom:.5rem;">🚗</div>
+      <div class="card-title">No vehicle paired yet</div>
+      <div style="font-size:.78rem;color:var(--muted);line-height:1.7;margin-bottom:1rem;">
+        Approve a driver (or yourself) on the Dispatch tab to start monitoring trips on your vehicle.
+      </div>
+      <button class="btn btn-gold btn-sm" onclick="renderTab(2)">Go to pairing</button>
+    </div>`;
+    return;
+  }
+
+  const vLabel = [pairing.vehicle, pairing.plate].filter(Boolean).join(' • ') || 'Your vehicle';
+  const driverLabel = pairing.driver.source==='self' ? `${pairing.driver.name} (owner-driver)` : pairing.driver.name;
+  const driverBadge = pairing.trust==='self'
+      ? '<span class="badge badge-gold">Owner-driver</span>'
+      : '<span class="badge badge-green">✓ Owner-approved</span>';
+
+  if(!tripActive){
+    // Paired, but idle — honest "no active trip" state.
+    mc.innerHTML=`
+    <div class="monitor-card">
+      <div class="monitor-header">
+        <div class="monitor-title">${vLabel}</div>
+        <div class="monitor-status" style="opacity:.7;">IDLE</div>
+      </div>
+      <div class="monitor-body">
+        <div style="background:var(--dark3);border-radius:10px;padding:.7rem .85rem;font-size:.8rem;line-height:1.9;">
+          <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;"><span style="color:var(--muted);">Driver:</span> <strong>${driverLabel}</strong> ${driverBadge}</div>
+          <div><span style="color:var(--muted);">Status:</span> <strong>No active trip</strong></div>
+        </div>
+        <div class="alert-row alert-ok" style="margin-top:.75rem;">✅ Vehicle idle — ready for trips.</div>
+      </div>
+    </div>
+    ${_monitorGuardianCard()}`;
+    return;
+  }
+
+  // Active trip — show REAL vehicle/driver/route. Telematics tiles gated.
   mc.innerHTML=`
   <div class="monitor-card">
     <div class="monitor-header">
-      <div class="monitor-title">Toyota Camry • LAG-234-KA</div>
-      <div class="monitor-status"><div class="pulse-dot"></div>LIVE TRACKING</div>
+      <div class="monitor-title">${vLabel}</div>
+      <div class="monitor-status"><div class="pulse-dot"></div>TRIP ACTIVE</div>
     </div>
     <div class="monitor-body">
-      <div class="map-box"><div class="map-grid"></div><div class="map-dot"></div><div class="map-dest"></div><div class="map-label">📍 En Route — Lekki</div></div>
-      <div class="eta-row" style="margin-top:.75rem;">
-        <div class="eta-item"><div class="eta-val">67</div><div class="eta-lbl">KM/H</div></div>
-        <div class="eta-item"><div class="eta-val">14km</div><div class="eta-lbl">DISTANCE</div></div>
-        <div class="eta-item"><div class="eta-val">₦950</div><div class="eta-lbl">EARNING NOW</div></div>
+      <div style="background:var(--dark3);border-radius:10px;padding:.7rem .85rem;font-size:.8rem;line-height:1.9;margin-bottom:.75rem;">
+        <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;"><span style="color:var(--muted);">Driver:</span> <strong>${driverLabel}</strong> ${driverBadge}</div>
+        <div><span style="color:var(--muted);">Route:</span> <strong>${trip.from} → ${trip.to}</strong></div>
+        <div><span style="color:var(--muted);">Fare:</span> <strong>₦${(trip.fare||0).toLocaleString()}</strong></div>
       </div>
-      <div class="divider"></div>
-      <div class="section-header">Trip Timeline</div>
-      <div class="timeline">
-        <div class="tl-item done"><strong>8:15 AM</strong> — Driver logged in<br/><span class="tl-time">Emeka Okafor — Verified</span></div>
-        <div class="tl-item done"><strong>8:45 AM</strong> — Trip started<br/><span class="tl-time">VI → Lekki Phase 1</span></div>
-        <div class="tl-item active"><strong>Now</strong> — In transit<br/><span class="tl-time">ETA 8 minutes</span></div>
+      <div class="eta-row" style="opacity:.55;">
+        <div class="eta-item"><div class="eta-val">—</div><div class="eta-lbl">KM/H</div></div>
+        <div class="eta-item"><div class="eta-val">—</div><div class="eta-lbl">LIVE GPS</div></div>
+        <div class="eta-item"><div class="eta-val">—</div><div class="eta-lbl">ETA</div></div>
       </div>
-      <div class="alert-row alert-ok">✅ Vehicle within approved zone. Speed normal.</div>
-      <div class="alert-row alert-warn" id="deviationAlert" style="display:none;">⚠️ Route deviation detected</div>
+      <div class="alert-row" style="background:rgba(201,168,76,.08);color:var(--gold);margin-top:.75rem;font-size:.7rem;">📡 Live speed, GPS & geofence activate at launch (Airtel M2M)</div>
     </div>
   </div>
+  ${_monitorGuardianCard()}`;
+}
+
+// Guardian card — design shown, live-only tiles labelled honestly.
+function _monitorGuardianCard(){
+  return `
   <div class="card">
     <div class="card-title">Vehicle Guardian</div>
-    <div style="font-size:.78rem;color:var(--muted);line-height:1.7;">Real-time deviation alerts and remote monitoring. Your asset, always protected.</div>
+    <div style="font-size:.78rem;color:var(--muted);line-height:1.7;">Real-time deviation alerts and remote monitoring — the protection layer that activates with telematics at launch.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.75rem;">
-      <div class="stat-box"><div class="stat-val">✅</div><div class="stat-lbl">Geofence OK</div></div>
-      <div class="stat-box"><div class="stat-val">✅</div><div class="stat-lbl">Insurance Active</div></div>
+      <div class="stat-box" style="opacity:.6;"><div class="stat-val" style="font-size:.85rem;">At launch</div><div class="stat-lbl">Geofence</div></div>
+      <div class="stat-box" style="opacity:.6;"><div class="stat-val" style="font-size:.85rem;">At launch</div><div class="stat-lbl">Insurance (Heirs)</div></div>
     </div>
   </div>`;
-  if(S._deviationTimer) clearTimeout(S._deviationTimer);
-  S._deviationTimer=setTimeout(()=>{
-    const el=document.getElementById('deviationAlert');
-    if(el){el.style.display='flex';showToast('⚠️ Vehicle route deviation detected');}
-    S._deviationTimer=null;
-  },8000);
 }
 
 function renderOwnerAssist(){
@@ -5330,6 +5534,113 @@ function renderOwnerEarnings(){
 
 
 // ═══════════════════════════════════════════════
+// OWNER — DRIVER PAIRING (v11.9.0)
+// The owner's approval is the trust event. Three honest paths, simplest first:
+//   1. "I'll drive it myself"  → source:'self'      (owner-driver, no 3rd party)
+//   2. "A driver I know"       → source:'known'     (manual, personal trust)
+//   3. "Find drivers near me"  → source:'proximity' (driver search — gated below)
+// Nothing here fakes verification or live location. Proximity is honestly a
+// search the driver runs; until that side is built + real GPS lands, path 3
+// shows an honest "coming" state rather than fabricated nearby drivers.
+// ═══════════════════════════════════════════════
+function _renderPairingCard(me, vehicle, plate, active){
+  const hasVehicle = !!(vehicle || plate);
+  const vLabel = [vehicle, plate].filter(Boolean).join(' • ') || 'your vehicle';
+
+  if(active){
+    const srcLabel = active.driver.source === 'self' ? 'You (owner-driver)'
+                   : active.driver.source === 'known' ? `${active.driver.name} — driver you approved`
+                   : `${active.driver.name} — approved from nearby drivers`;
+    const trustBadge = active.trust === 'self'
+      ? '<span class="badge badge-gold">Owner-driver</span>'
+      : '<span class="badge badge-green">✓ Owner-approved</span>';
+    return `
+    <div class="card" style="border-color:var(--success);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;">
+        <div class="card-title" style="margin-bottom:0;">Active Pairing</div>
+        ${trustBadge}
+      </div>
+      <div style="background:var(--dark3);border-radius:10px;padding:.7rem .85rem;font-size:.8rem;line-height:1.9;">
+        <div><span style="color:var(--muted);">Vehicle: </span><strong>${[active.vehicle,active.plate].filter(Boolean).join(' • ')||'—'}</strong></div>
+        <div><span style="color:var(--muted);">Driver: </span><strong>${srcLabel}</strong></div>
+      </div>
+      <div style="font-size:.64rem;color:var(--muted);margin-top:.6rem;line-height:1.5;">
+        This is the driver riders will see for trips on this vehicle. Full background &amp; medical verification activates at launch.
+      </div>
+      <button class="btn btn-outline btn-sm" style="width:100%;margin-top:.7rem;" onclick="clearPairing('${active.id}')">Change pairing</button>
+    </div>`;
+  }
+
+  return `
+  <div class="card" style="border-color:var(--gold);">
+    <div style="display:flex;align-items:center;gap:.55rem;margin-bottom:.5rem;">
+      <span style="font-size:1.25rem;">🔑</span>
+      <div class="card-title" style="margin-bottom:0;color:var(--gold);">Who drives ${hasVehicle?`<strong>${vLabel}</strong>`:'your vehicle'}?</div>
+    </div>
+    <div style="font-size:.72rem;color:var(--muted);line-height:1.6;margin-bottom:.85rem;">
+      You decide who is trusted to drive. Your approval is what every rider sees.
+    </div>
+
+    <!-- Path 1: owner-driver (simplest, most common) -->
+    <button class="btn btn-gold" style="width:100%;margin-bottom:.5rem;text-align:left;" onclick="pairSelf()">
+      🚗 I'll drive it myself
+      <div style="font-size:.62rem;font-weight:400;opacity:.85;margin-top:.1rem;">Owner-driver — you keep the driver share and the owner share.</div>
+    </button>
+
+    <!-- Path 2: known driver -->
+    <button class="btn btn-outline" style="width:100%;margin-bottom:.5rem;text-align:left;" onclick="pairKnownDriver()">
+      🤝 Approve a driver I know
+      <div style="font-size:.62rem;font-weight:400;color:var(--muted);margin-top:.1rem;">Pair with someone you already trust.</div>
+    </button>
+
+    <!-- Path 3: proximity (honest "coming" state — no fake nearby drivers) -->
+    <button class="btn btn-outline" style="width:100%;text-align:left;opacity:.7;" onclick="pairProximityInfo()">
+      📍 Find drivers near me
+      <div style="font-size:.62rem;font-weight:400;color:var(--muted);margin-top:.1rem;">Drivers search for available vehicles nearby — activating at launch.</div>
+    </button>
+  </div>`;
+}
+
+function pairSelf(){
+  const me = IdentityStore.current() || {};
+  if(!me.name){ showToast('Register first to pair a vehicle'); return; }
+  const pairing = PairingStore.approve({
+    vehicle: me.vehicle_type || '',
+    plate:   me.plate || me.plate_number || '',
+    owner:  { name: me.name, fu_number: me.fu_number },
+    driver: { name: me.name, fu_number: me.fu_number },
+    source: 'self'
+  });
+  if(pairing){ showToast('✅ You are paired as the driver of your vehicle'); renderOwnerDispatch(); }
+}
+
+function pairKnownDriver(){
+  const me = IdentityStore.current() || {};
+  if(!me.name){ showToast('Register first to pair a vehicle'); return; }
+  const name = prompt("Driver's full name (someone you trust to drive your vehicle):");
+  if(!name || !name.trim()) return;
+  const pairing = PairingStore.approve({
+    vehicle: me.vehicle_type || '',
+    plate:   me.plate || me.plate_number || '',
+    owner:  { name: me.name, fu_number: me.fu_number },
+    driver: { name: name.trim(), fu_number: null },
+    source: 'known'
+  });
+  if(pairing){ showToast(`✅ ${name.trim()} approved as your driver`); renderOwnerDispatch(); }
+}
+
+function pairProximityInfo(){
+  showToast('Nearby-driver matching activates at launch — owner approval still required.');
+}
+
+function clearPairing(id){
+  if(!id) return;
+  PairingStore.remove(id);
+  showToast('Pairing cleared');
+  renderOwnerDispatch();
+}
+
+// ═══════════════════════════════════════════════
 // OWNER — DISPATCH (Bike System)
 // ═══════════════════════════════════════════════
 function renderOwnerDispatch(){
@@ -5342,7 +5653,15 @@ function renderOwnerDispatch(){
   const lastTrip=dispatchTrips.filter(t=>t.ownerId==='demo-owner'&&t.status==='completed').slice(-1)[0];
   const riderStatus=dispatchShiftActive?'active':'offline';
 
+  // v11.9.0 — Real owner identity + vehicle for the pairing flow.
+  const _me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
+  const _ownerVehicle = _me.vehicle_type || '';
+  const _ownerPlate    = _me.plate || _me.plate_number || '';
+  const _activePairing = (typeof PairingStore!=='undefined')
+      ? PairingStore.activeFor(_me.fu_number, _ownerPlate) : null;
+
   mc.innerHTML=`
+  ${_renderPairingCard(_me, _ownerVehicle, _ownerPlate, _activePairing)}
   <div class="card" style="border-color:var(--gold);">
     <div style="display:flex;align-items:center;gap:.65rem;margin-bottom:.5rem;">
       <span style="font-size:1.4rem;">🏍️</span>
@@ -5455,8 +5774,8 @@ function renderOwnerDispatch(){
   `:
   `<!-- RIDER ASSIGNMENT -->
   <div class="card">
-    <div class="card-title">Assign a Rider to Your Bike</div>
-    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.85rem;line-height:1.6;">Select a vetted dispatch rider. They will operate your bike and complete delivery jobs. You earn 40% of every trip automatically.</div>
+    <div class="card-title">Assign a Rider to Your Bike <span class="badge" style="background:var(--dark3);color:var(--muted);font-weight:600;font-size:.58rem;">SAMPLE</span></div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.85rem;line-height:1.6;">Select a vetted dispatch rider. They will operate your bike and complete delivery jobs. You earn 40% of every trip automatically. <span style="color:var(--muted);font-style:italic;">Sample riders shown — real onboarded riders appear here at launch.</span></div>
     ${DISPATCH_RIDERS.map(r=>`
     <div style="background:var(--dark3);border:1.5px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.5rem;display:flex;justify-content:space-between;align-items:center;">
       <div>
@@ -6605,7 +6924,7 @@ function _journeyOwnerBookAssist(){
   mc.innerHTML = `
   ${journeyHeader('owner','Step 2 of 4 · Assist request active','70s')}
   <div class="card" style="border-color:var(--gold);">
-    <div class="card-title" style="color:var(--gold);">🔑 AURAA ASSIST Active</div>
+    <div class="card-title" style="color:var(--gold);">🔑 AURAA ASSIST Active <span class="badge" style="background:var(--dark3);color:var(--muted);font-weight:600;font-size:.58rem;">EXAMPLE</span></div>
     <div style="font-size:.8rem;line-height:1.8;margin-bottom:.7rem;">
       <div><span style="color:var(--muted);">Driver:</span> <strong>Emeka Okafor</strong></div>
       <div><span style="color:var(--muted);">Your vehicle:</span> <strong>Toyota Camry · LAG-234-KA</strong></div>
