@@ -1297,7 +1297,18 @@ const TripSync = (function(){
       status:      'searching',
       origin:      trip.from,
       destination: trip.to,
-      price:       trip.fare
+      price:       trip.fare,
+      // v11.9.2 — Persist the service and the owner attribution. Without service,
+      // cross-device reconstruction hardcoded GO and a BICYCLE trip settled
+      // 55/25/20 instead of 80/20. Without owner fields, no trip could ever be
+      // tied back to the owner whose vehicle ran it — the core differentiator
+      // had no data trail.
+      service:     trip.svc || 'GO',
+      owner_name:  trip.owner || null,
+      owner_fu:    trip.pairing?.owner?.fu_number || null,
+      vehicle:     trip.vehicle || null,
+      plate:       trip.plate || null,
+      pairing_id:  trip.pairing?.id || null
     };
     const { data, error } = await c.from('trips').insert(row).select().single();
     if(error){ console.error('[TripSync] write failed:', error); return null; }
@@ -1369,6 +1380,77 @@ const TripSync = (function(){
     return channel;
   }
 
+  // v11.9.2 — PAIRING SYNC. The owner's approval is the trust event of the whole
+  // platform; until now it lived only in one device's localStorage. These mirror
+  // PairingStore writes to the Supabase pairings table so an approval made on
+  // the owner's phone is visible to every booking device.
+  async function writePairing(p){
+    const c = _getClient();
+    if(!c){ console.warn('[PairingSync] client not ready — pairing local only'); return false; }
+    const row = {
+      id:          p.id,
+      vehicle:     p.vehicle || '',
+      plate:       p.plate || '',
+      owner_name:  p.owner?.name || '',
+      owner_fu:    p.owner?.fu_number || null,
+      driver_name: p.driver?.name || '',
+      driver_fu:   p.driver?.fu_number || null,
+      source:      p.driver?.source || 'known',
+      trust:       p.trust,
+      status:      p.status,
+      approved_at: p.approvedAt
+    };
+    const { error } = await c.from('pairings').upsert(row);
+    if(error){ console.error('[PairingSync] write failed:', error); return false; }
+    console.log('[PairingSync] ✅ pairing synced:', p.id);
+    return true;
+  }
+
+  async function setPairingStatus(id, status){
+    const c = _getClient();
+    if(!c) return;
+    const { error } = await c.from('pairings').update({ status }).eq('id', id);
+    if(error) console.error('[PairingSync] status update failed:', error);
+  }
+
+  async function fetchPairings(){
+    const c = _getClient();
+    if(!c) return null;
+    const { data, error } = await c.from('pairings').select('*').order('approved_at', { ascending: false }).limit(100);
+    if(error){ console.error('[PairingSync] fetch failed:', error); return null; }
+    return data || [];
+  }
+
+  // v11.9.2 — OWNER TRIP HISTORY. Every trip run in the owner's vehicle, fetched
+  // by the owner attribution stamped at booking. This is the accountability loop:
+  // the owner sees who drove their car, where, and what it earned them.
+  async function fetchOwnerTrips(ownerFu, ownerName){
+    const c = _getClient();
+    if(!c) return null;
+    let q = c.from('trips').select('*').order('created_at', { ascending: false }).limit(100);
+    if(ownerFu)        q = q.eq('owner_fu', ownerFu);
+    else if(ownerName) q = q.eq('owner_name', ownerName);
+    else return [];
+    const { data, error } = await q;
+    if(error){ console.error('[TripSync] owner-trips fetch failed:', error); return null; }
+    return data || [];
+  }
+
+  // Owner-share per trip from the settlement ledger (party='owner' rows) —
+  // the ledger is the source of truth, not a recomputation.
+  async function fetchOwnerShares(tripIds){
+    const c = _getClient();
+    if(!c || !tripIds || !tripIds.length) return {};
+    const { data, error } = await c.from('wallet_transactions')
+      .select('trip_id, amount')
+      .eq('party', 'owner')
+      .in('trip_id', tripIds.map(String));
+    if(error){ console.error('[TripSync] owner-shares fetch failed:', error); return {}; }
+    const map = {};
+    (data||[]).forEach(r => { map[r.trip_id] = (map[r.trip_id]||0) + Number(r.amount||0); });
+    return map;
+  }
+
   async function writeSettlement(tripId, svc, legs){
     const c = _getClient();
     if(!c){ console.warn('[TripSync] client not ready — settlement local only'); return false; }
@@ -1388,7 +1470,8 @@ const TripSync = (function(){
     } catch(e){ console.error('[TripSync] settlement exception:', e); return false; }
   }
 
-  return { writeTrip, updateTrip, fetchPendingTrips, fetchMyTrips, subscribeToTrips, writeSettlement };
+  return { writeTrip, updateTrip, fetchPendingTrips, fetchMyTrips, subscribeToTrips, writeSettlement,
+           writePairing, setPairingStatus, fetchPairings, fetchOwnerTrips, fetchOwnerShares };
 })();
 
 // SUPABASE INTEGRATION — v11.2.0
@@ -4271,16 +4354,29 @@ function getSplits(svc,fare,ctx){
   // the mechanic's monthly subscription, not from the repair transaction itself. This keeps
   // AURAA out of the repair-warranty liability chain (see MechanicStore for subscription logic).
   const bikeOwnership = (ctx && ctx.bikeOwnership) || 'self';
+  const _twoWheel = bikeOwnership === 'fleet'
+              ? [['Biker (60%)',.60],['Bike Owner (20%)',.20],['Platform (20%)',.20]]
+              : [['Biker (80%)',.80],['Platform (20%)',.20]];
   const m={
     go:      [['Driver (55%)',.55],['Vehicle Owner (25%)',.25],['Platform (20%)',.20]],
     assist:  [['Driver (50%)',.50],['Vehicle Owner (30%)',.30],['Platform (20%)',.20]],
-    bike:    bikeOwnership === 'fleet'
-              ? [['Biker (60%)',.60],['Bike Owner (20%)',.20],['Platform (20%)',.20]]
-              : [['Biker (80%)',.80],['Platform (20%)',.20]],
+    bike:    _twoWheel,
+    // v11.9.2 — dispatch IS a two-wheel job. It had no entry here and fell back
+    // to GO 55/25/20, paying a phantom Vehicle Owner 25% on dispatch trips.
+    dispatch: _twoWheel,
     skate:   [['Skater (80%)',.80],['Platform (20%)',.20]],
     bicycle: [['Cyclist (80%)',.80],['Platform (20%)',.20]],
   };
-  return (m[svc]||m.go).map(([l,p])=>({l,v:Math.round(fare*p)}));
+  // v11.9.2 — Legs must sum to the fare EXACTLY. Per-leg Math.round drifted ±₦1
+  // on odd-half fares (₦9,550 ledgered as ₦9,551 on 10 Jun). Floor each leg,
+  // Platform absorbs the remainder — driver/owner shares never shrink.
+  const parts = (m[svc]||m.go).map(([l,p])=>({l,v:Math.floor(fare*p)}));
+  const rem = Math.round(fare) - parts.reduce((a,b)=>a+b.v,0);
+  if(rem !== 0){
+    const plat = parts.find(x=>/platform/i.test(x.l)) || parts[parts.length-1];
+    plat.v += rem;
+  }
+  return parts;
 }
 
 // ═══════════════════════════════════════════════
@@ -4841,7 +4937,9 @@ function renderDriverTrips(){
       if(!existingUUID || existingUUID !== t.id){
         const crossDeviceTrip = {
           id:             'PROOF-' + t.id,
-          svc:            'GO',
+          // v11.9.2 — Read the real service from the DB. Hardcoded 'GO' meant a
+          // BICYCLE/SKATE/BIKE trip accepted cross-device settled at GO 55/25/20.
+          svc:            t.service || 'GO',
           from:           t.origin,
           to:             t.destination,
           fare:           parseFloat(t.price) || 3500,
@@ -4849,7 +4947,11 @@ function renderDriverTrips(){
           riderName:      t.rider_id || 'Rider',
           riderEmail:     t.rider_id || '',
           time:           new Date(t.created_at).toLocaleString(),
-          ownerAuth:      false,
+          // v11.9.2 — Owner attribution now persists, so carry it across devices.
+          ownerAuth:      !!t.owner_name,
+          owner:          t.owner_name || null,
+          vehicle:        t.vehicle || null,
+          plate:          t.plate || null,
           // v11.9.1 — Carry the driver assigned at booking. Without this the
           // accepting phone's acceptProofTrip fell back to its own identity,
           // overwriting the owner-approved pairing. Trust level isn't stored
@@ -5274,6 +5376,8 @@ const PairingStore = {
         && p.plate === pairing.plate)); // one active pairing per owner+vehicle
     list.push(pairing);
     this._save(list);
+    // v11.9.2 — Mirror to Supabase (non-blocking; local approval already applied).
+    if(typeof TripSync !== 'undefined') TripSync.writePairing(pairing);
     return pairing;
   },
 
@@ -5286,9 +5390,46 @@ const PairingStore = {
   },
 
   list(){ return this._all(); },
-  pause(id){ const l=this._all(); const p=l.find(x=>x.id===id); if(p){p.status='paused'; this._save(l);} },
-  remove(id){ this._save(this._all().filter(x=>x.id!==id)); },
+  pause(id){
+    const l=this._all(); const p=l.find(x=>x.id===id);
+    if(p){ p.status='paused'; this._save(l);
+      if(typeof TripSync !== 'undefined') TripSync.setPairingStatus(id, 'paused'); }
+  },
+  remove(id){
+    this._save(this._all().filter(x=>x.id!==id));
+    if(typeof TripSync !== 'undefined') TripSync.setPairingStatus(id, 'removed');
+  },
+
+  // v11.9.2 — Hydrate from Supabase at startup so approvals made on another
+  // device are visible here. DB rows win on conflict (same id); local-only
+  // pairings not yet synced are kept and re-pushed.
+  async hydrate(){
+    if(typeof TripSync === 'undefined') return;
+    const rows = await TripSync.fetchPairings();
+    if(rows === null) return; // offline / client not ready — keep local as-is
+    const local = this._all();
+    const dbIds = new Set(rows.map(r=>r.id));
+    const merged = rows
+      .filter(r => r.status !== 'removed')
+      .map(r => ({
+        id: r.id,
+        vehicle: r.vehicle || '',
+        plate: r.plate || '',
+        owner:  { name: r.owner_name || '',  fu_number: r.owner_fu  || null },
+        driver: { name: r.driver_name || '', fu_number: r.driver_fu || null, source: r.source || 'known' },
+        trust:  r.trust || 'owner-approved',
+        approvedAt: r.approved_at,
+        status: r.status || 'active',
+      }));
+    const unsynced = local.filter(p => !dbIds.has(p.id));
+    unsynced.forEach(p => TripSync.writePairing(p)); // push strays up
+    this._save(merged.concat(unsynced));
+    if(merged.length || unsynced.length)
+      console.log('[PairingSync] hydrated:', merged.length, 'from DB,', unsynced.length, 'local pushed');
+  },
 };
+// v11.9.2 — Pull cross-device pairings once the page is up.
+setTimeout(()=>{ try{ PairingStore.hydrate(); }catch(e){} }, 1500);
 
 // ── UNIFIED DRIVER SYSTEM ─────────────────────────────────────────────────
 const DRIVER_TYPES = {
@@ -5380,7 +5521,9 @@ function renderOwnerMonitor(){
         <div class="alert-row alert-ok" style="margin-top:.75rem;">✅ Vehicle idle — ready for trips.</div>
       </div>
     </div>
-    ${_monitorGuardianCard()}`;
+    ${_monitorGuardianCard()}
+    <div id="ownerTripLog"></div>`;
+    _loadOwnerTripLog(me, pairing);
     return;
   }
 
@@ -5405,7 +5548,9 @@ function renderOwnerMonitor(){
       <div class="alert-row" style="background:rgba(201,168,76,.08);color:var(--gold);margin-top:.75rem;font-size:.7rem;">📡 Live speed, GPS & geofence activate at launch (Airtel M2M)</div>
     </div>
   </div>
-  ${_monitorGuardianCard()}`;
+  ${_monitorGuardianCard()}
+  <div id="ownerTripLog"></div>`;
+  _loadOwnerTripLog(me, pairing);
 }
 
 // Guardian card — design shown, live-only tiles labelled honestly.
@@ -5418,6 +5563,84 @@ function _monitorGuardianCard(){
       <div class="stat-box" style="opacity:.6;"><div class="stat-val" style="font-size:.85rem;">At launch</div><div class="stat-lbl">Geofence</div></div>
       <div class="stat-box" style="opacity:.6;"><div class="stat-val" style="font-size:.85rem;">At launch</div><div class="stat-lbl">Insurance (Heirs)</div></div>
     </div>
+  </div>`;
+}
+
+// ── OWNER TRIP LOG — v11.9.2 ──────────────────────────────────────────────
+// The accountability loop: every trip run in this owner's vehicle, grouped by
+// driver, with the owner's share per trip read from the settlement ledger.
+// This is what makes handing your car to a paired driver a monitored decision,
+// not a leap of faith — the surface incumbents structurally don't have because
+// they don't have the owner as a party. Reads only persisted, honest data:
+// trips stamped with owner attribution at booking + party='owner' ledger rows.
+async function _loadOwnerTripLog(me, pairing){
+  const box = document.getElementById('ownerTripLog');
+  if(!box) return;
+  const ownerFu   = me?.fu_number || pairing?.owner?.fu_number || null;
+  const ownerName = me?.name || pairing?.owner?.name || null;
+  if(!ownerFu && !ownerName) return;
+
+  box.innerHTML = `<div class="card"><div class="card-title">My Vehicle's Trips</div>
+    <div style="font-size:.75rem;color:var(--muted);">Loading trip history…</div></div>`;
+
+  const trips = await TripSync.fetchOwnerTrips(ownerFu, ownerName);
+  if(trips === null){
+    box.innerHTML = `<div class="card"><div class="card-title">My Vehicle's Trips</div>
+      <div style="font-size:.75rem;color:var(--muted);">Couldn't reach the trip ledger — check connection and reopen Monitor.</div></div>`;
+    return;
+  }
+  if(!trips.length){
+    box.innerHTML = `<div class="card"><div class="card-title">My Vehicle's Trips</div>
+      <div style="font-size:.75rem;color:var(--muted);line-height:1.7;">No trips recorded in your vehicle yet. Once a paired driver completes a booking, every trip — driver, route, your share — appears here automatically.</div></div>`;
+    return;
+  }
+
+  const shares = await TripSync.fetchOwnerShares(trips.map(t=>t.id));
+
+  // Group by driver
+  const byDriver = {};
+  trips.forEach(t=>{
+    const d = t.driver_name || 'Unassigned';
+    (byDriver[d] = byDriver[d] || []).push(t);
+  });
+
+  const statusBadge = s => {
+    const map = { completed:'badge-green', accepted:'badge-gold', searching:'badge-gold' };
+    return `<span class="badge ${map[s]||'badge-gold'}" style="font-size:.58rem;">${(s||'—').toUpperCase()}</span>`;
+  };
+
+  const groups = Object.entries(byDriver).map(([driver, list])=>{
+    const total = list.reduce((a,t)=>a + (shares[t.id]||0), 0);
+    const isPaired = pairing && pairing.driver && pairing.driver.name === driver;
+    const rows = list.map(t=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:.45rem 0;border-bottom:1px solid var(--border);font-size:.74rem;gap:.5rem;">
+        <div style="min-width:0;">
+          <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.origin} → ${t.destination}</div>
+          <div style="color:var(--muted);font-size:.66rem;">${new Date(t.created_at).toLocaleString()} · ${t.service||'GO'}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          ${statusBadge(t.status)}
+          <div style="color:var(--gold);font-weight:700;margin-top:.15rem;">${shares[t.id] ? '+₦'+shares[t.id].toLocaleString() : '—'}</div>
+        </div>
+      </div>`).join('');
+    return `
+    <div style="background:var(--dark3);border-radius:12px;padding:.8rem .9rem;margin-bottom:.6rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.35rem;">
+        <div style="font-size:.84rem;font-weight:700;">${driver} ${isPaired?'<span class="badge badge-green" style="font-size:.56rem;">✓ OWNER-APPROVED</span>':''}</div>
+        <div style="text-align:right;">
+          <div style="font-size:.62rem;color:var(--muted);">${list.length} trip${list.length>1?'s':''} · your share</div>
+          <div style="color:var(--gold);font-weight:800;font-size:.92rem;">₦${total.toLocaleString()}</div>
+        </div>
+      </div>
+      ${rows}
+    </div>`;
+  }).join('');
+
+  box.innerHTML = `
+  <div class="card">
+    <div class="card-title">My Vehicle's Trips</div>
+    <div style="font-size:.7rem;color:var(--muted);margin-bottom:.7rem;line-height:1.6;">Every trip run in your vehicle — who drove, where, and what it earned you. Shares are read from the settlement ledger, not estimated.</div>
+    ${groups}
   </div>`;
 }
 
@@ -5513,7 +5736,10 @@ function createAssistRequest(){
   const duration=document.getElementById('assistDuration')?.value||'';
   const driver=vettedDrivers.find(d=>d.id===assignedDriverId)||vettedDrivers[0];
   const distKm = getApproxDistance(pickup.split(',')[0].trim(), dest.split(',')[0].trim()) || 10;
-  const f = computeFare('assist', distKm, Math.round(distKm * getSurgeMultiplier() > 1 ? 7 : 4 * distKm));
+  // v11.9.2 — Precedence bug fixed: the old expression evaluated the comparison
+  // first, so duration was a flat 7 min for any trip over 1km, undercharging
+  // ASSIST time. Now matches the main booking flow's deterministic ~3 min/km.
+  const f = computeFare('assist', distKm, Math.max(1, Math.round(distKm * 3)));
   assistRequestActive=true;
   showToast(`✅ Assist request sent to ${driver.name}`);
   // Push into trip pool so driver sees it
@@ -7069,7 +7295,12 @@ function _deliveryLikeJourney(me, role, fare, from, to){
 
 function _delJrnAccept(role, fare, from, to){
   const me = IdentityStore.current();
-  const earn = role==='bicycler'?Math.round(fare*0.8):Math.round(fare*0.6);
+  // v11.9.2 — Route through getSplits, the single source of truth. The hardcoded
+  // fare*0.6 contradicted the "Biker 80% · Platform 20%" card shown one step
+  // earlier — a self-owned biker earns 80%; only fleet-owned bikes split 60/20/20.
+  const _own = me?.bike_ownership || (typeof Onboarding!=='undefined' && Onboarding.owners?.().find(o=>o.email===me?.email)?.bike_ownership) || 'self';
+  const _legs = getSplits(role==='bicycler' ? 'bicycle' : 'bike', fare, {bikeOwnership:_own});
+  const earn = _legs[0].v;
   S.driverWallet += earn;
   localStorage.setItem('auraa_driver_wallet', S.driverWallet);
   logTx({title:`AURAA ${role==='bicycler'?'BICYCLE':'BIKE'} — ${from} → ${to}`, amount:earn, type:'credit'});
