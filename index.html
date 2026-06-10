@@ -1290,6 +1290,10 @@ const TripSync = (function(){
     const row = {
       rider_id:    trip.riderEmail || 'sim-rider',
       driver_id:   null,
+      // v11.9.1 — Persist the paired driver at booking time. The booking device
+      // is the only one that knows the owner-approved pairing; without this the
+      // accepting phone falls back to its own identity and driver_name stays NULL.
+      driver_name: trip.driver?.name || null,
       status:      'searching',
       origin:      trip.from,
       destination: trip.to,
@@ -1303,20 +1307,38 @@ const TripSync = (function(){
     return data.id;
   }
 
-  async function updateTrip(tripId, patch){
+  async function updateTrip(tripId, patch, uuidOverride){
     const c = _getClient();
     if(!c) return;
     // Map our patch keys to existing schema
     const mapped = {};
-    if(patch.status)       mapped.status    = patch.status;
-    if(patch.driver_id)    mapped.driver_id = patch.driver_id;
-    // Use the Supabase UUID stored on the trip object
+    if(patch.status)       mapped.status      = patch.status;
+    if(patch.driver_id)    mapped.driver_id   = patch.driver_id;
+    if(patch.driver_name)  mapped.driver_name = patch.driver_name; // v11.9.1 — was silently dropped
+    // v11.9.1 — Caller-supplied UUID wins. Reading only localStorage here broke
+    // completion: completeProofTrip clears auraa_live_trip BEFORE this runs, so
+    // the uuid lookup failed and the status update was silently skipped
+    // (DB rows stuck at 'accepted' forever).
     const liveTrip = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
-    const uuid = liveTrip?._supabase_uuid;
+    const uuid = uuidOverride || liveTrip?._supabase_uuid || liveTrip?._supabase_id;
     if(!uuid){ console.warn('[TripSync] no supabase UUID to update'); return; }
     const { error } = await c.from('trips').update(mapped).eq('id', uuid);
     if(error) console.error('[TripSync] update failed:', error);
     else console.log('[TripSync] ✅ trip updated:', uuid, mapped);
+  }
+
+  // v11.9.1 — Rider trip history from Supabase, so My Trips follows the user
+  // across devices instead of living in one browser's localStorage.
+  async function fetchMyTrips(riderEmail){
+    const c = _getClient();
+    if(!c || !riderEmail) return null;
+    const { data, error } = await c.from('trips')
+      .select('*')
+      .eq('rider_id', riderEmail)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if(error){ console.error('[TripSync] my-trips fetch failed:', error); return null; }
+    return data || [];
   }
 
   async function fetchPendingTrips(){
@@ -1366,7 +1388,7 @@ const TripSync = (function(){
     } catch(e){ console.error('[TripSync] settlement exception:', e); return false; }
   }
 
-  return { writeTrip, updateTrip, fetchPendingTrips, subscribeToTrips, writeSettlement };
+  return { writeTrip, updateTrip, fetchPendingTrips, fetchMyTrips, subscribeToTrips, writeSettlement };
 })();
 
 // SUPABASE INTEGRATION — v11.2.0
@@ -4588,14 +4610,16 @@ function completeTrip(){
 // RIDER — MY TRIPS
 // ═══════════════════════════════════════════════
 function renderMyTrips(){
-  const trips=getTxLog().filter(t=>t.type==='debit'&&t.title.includes('AURAA'));
   const mc=document.getElementById('mainContent');
-  if(!trips.length){
-    mc.innerHTML=`<div class="empty-state"><div class="empty-icon">🚗</div>No trips yet. Book your first ride!</div>`;
-    return;
-  }
-  mc.innerHTML=`<div class="card"><div class="card-title">Trip History</div>${
-    trips.map(t=>`<div class="tx-row">
+
+  // v11.9.1 — Trip history now reads from Supabase (cross-device, durable).
+  // The old version read only the local tx log, so history lived in one
+  // browser's localStorage and missed any trip booked elsewhere — and the
+  // Flutterwave-paid titles ('🟢 LIVE Trip Payment…') failed the includes('AURAA')
+  // filter entirely. Local log still renders instantly as an offline fallback.
+  const local=getTxLog().filter(t=>t.type==='debit'&&(t.title.includes('AURAA')||t.title.includes('Trip Payment')));
+  mc.innerHTML=`<div class="card"><div class="card-title">Trip History</div><div id="myTripsList">${
+    local.length?local.map(t=>`<div class="tx-row">
       <div class="tx-info">
         <div class="tx-title" style="font-weight:600;">${t.title}</div>
         <div class="tx-date" style="display:flex;gap:.5rem;align-items:center;">
@@ -4605,7 +4629,34 @@ function renderMyTrips(){
       </div>
       <div class="tx-amount tx-debit">−₦${Math.abs(t.amount).toLocaleString()}</div>
     </div>`).join('')
-  }</div>`;
+    :`<div class="empty-state" style="padding:1rem 0;"><div class="empty-icon">🚗</div>Loading your trips…</div>`
+  }</div></div>`;
+
+  const me=(typeof IdentityStore!=='undefined'&&IdentityStore.current())||{};
+  TripSync.fetchMyTrips(me.email).then(rows=>{
+    const list=document.getElementById('myTripsList');
+    if(!list) return;        // user navigated away
+    if(rows===null) return;  // Supabase unavailable — keep local fallback
+    const trips=rows.filter(r=>r.origin!=='MVP_PORTAL'); // exclude onboarding records
+    if(!trips.length){
+      if(!local.length) list.innerHTML=`<div class="empty-state"><div class="empty-icon">🚗</div>No trips yet. Book your first ride!</div>`;
+      return;
+    }
+    const badge=s=> s==='completed' ? '<span class="badge badge-green" style="font-size:.6rem;">COMPLETED</span>'
+                  : s==='accepted'  ? '<span class="badge badge-gold" style="font-size:.6rem;">IN PROGRESS</span>'
+                  : '<span class="badge" style="font-size:.6rem;">SEARCHING</span>';
+    list.innerHTML=trips.map(r=>`<div class="tx-row">
+      <div class="tx-info">
+        <div class="tx-title" style="font-weight:600;">AURAA — ${r.origin||'—'} → ${r.destination||'—'}</div>
+        <div class="tx-date" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+          <span>${new Date(r.created_at).toLocaleString()}</span>
+          ${badge(r.status)}
+          ${r.driver_name?`<span style="color:var(--muted);">· Driver: ${r.driver_name}</span>`:''}
+        </div>
+      </div>
+      <div class="tx-amount tx-debit">−₦${(parseFloat(r.price)||0).toLocaleString()}</div>
+    </div>`).join('');
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -4799,6 +4850,11 @@ function renderDriverTrips(){
           riderEmail:     t.rider_id || '',
           time:           new Date(t.created_at).toLocaleString(),
           ownerAuth:      false,
+          // v11.9.1 — Carry the driver assigned at booking. Without this the
+          // accepting phone's acceptProofTrip fell back to its own identity,
+          // overwriting the owner-approved pairing. Trust level isn't stored
+          // in the DB yet, so no badge is claimed — name only. Honest fields only.
+          driver:         t.driver_name ? { name: t.driver_name, source: 'pairing', trust: null } : null,
           paymentSource:  'wallet',
           _from_supabase: true,
           _supabase_uuid: t.id
@@ -4863,7 +4919,9 @@ function renderDriverTrips(){
           <div style="font-size:.64rem;color:var(--muted);margin-top:.15rem;">${
             liveTrip.driver.trust==='self'
               ? 'This driver owns the vehicle. Full verification activates at launch.'
-              : 'Approved by the vehicle&rsquo;s owner. Full background &amp; medical verification activates at launch.'
+              : liveTrip.driver.trust
+                ? 'Approved by the vehicle&rsquo;s owner. Full background &amp; medical verification activates at launch.'
+                : 'Assigned at booking. Full verification activates at launch.'
           }</div>
         </div>`:''}
         <div style="display:flex;align-items:center;gap:.4rem;font-size:.7rem;margin-bottom:.5rem;">
@@ -5003,12 +5061,12 @@ function acceptProofTrip(){
   localStorage.setItem('auraa_proof_trip_status','accepted');
 
   // v11.5.0 — Update Supabase record
+  // v11.9.1 — Pass the UUID explicitly; drop accepted_at/driver_fu (no such
+  // columns — they were silently discarded and implied persistence we don't have).
   TripSync.updateTrip(liveTrip.id, {
     status: 'accepted',
-    accepted_at: new Date().toISOString(),
-    driver_name: liveTrip.driver.name,
-    driver_fu: liveTrip.driver.fu_number
-  });
+    driver_name: liveTrip.driver.name
+  }, liveTrip._supabase_uuid || liveTrip._supabase_id);
   // v11.8.0 — No money moves on acceptance. Settlement happens at completion,
   // split across parties via settleTrip(). (Was: credited driver the FULL fare.)
   showToast(`✅ Trip accepted — ${liveTrip.from} → ${liveTrip.to}`);
@@ -5047,6 +5105,10 @@ function completeProofTrip(){
   const completed=JSON.parse(localStorage.getItem('auraa_completed_trips')||'[]');
   completed.unshift(liveTrip);
   localStorage.setItem('auraa_completed_trips',JSON.stringify(completed.slice(0,100)));
+  // v11.9.1 — Capture the Supabase UUID BEFORE clearing localStorage.
+  // updateTrip used to read it from auraa_live_trip, which we remove below —
+  // so the 'completed' status never reached the database.
+  const _uuid = liveTrip._supabase_uuid || liveTrip._supabase_id || null;
   // Clear live keys so Driver queue is fresh for the next booking
   localStorage.removeItem('auraa_live_trip');
   localStorage.removeItem('auraa_proof_trip_status');
@@ -5056,10 +5118,12 @@ function completeProofTrip(){
   //  it had SKATE 75/25 and BIKE 65/15/20, contradicting 80/20 and 80/20-or-60/20/20.)
   const legs = settleTrip(liveTrip);
 
+  // v11.9.1 — Use the captured UUID; stamp the real driver name.
+  // (Removed driver_id:'sim-driver' — fabricated data has no place in the ledger.)
   TripSync.updateTrip(liveTrip.id, {
     status: 'completed',
-    driver_id: 'sim-driver'
-  });
+    driver_name: liveTrip.driver?.name || null
+  }, _uuid);
   showToast('🏁 Trip completed! Settled across parties.');
   const mc=document.getElementById('mainContent');
   mc.innerHTML=`
