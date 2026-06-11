@@ -3795,6 +3795,40 @@ function renderTab(i){
     admin:    [renderAdminDash,renderAdminTrips,renderAdminRevenue,renderAdminVisitors,renderInvestorTab],
   };
   (renders[S.role]||[])[i]?.();
+  _journeyNudge(i); // v11.9.3 — first-time-user journey prompt (founding-user feedback, 11 Jun)
+}
+
+// ── JOURNEY NUDGE — v11.9.3 ───────────────────────────────────────────────
+// Real founding-user feedback: first-time users land on the dashboard with no
+// idea what they're looking at. The built role journey answers exactly that,
+// but nothing pointed to it. This banner sits at the top of the landing tab,
+// every session, until the journey for this role is completed. Skippable —
+// but it returns next login. Skipping is a session choice, not a permanent one.
+function _journeyNudge(tabIdx){
+  if(tabIdx !== 0) return;
+  const jIdx = (tabConfig[S.role]||[]).indexOf('Journey');
+  if(jIdx < 0) return; // role has no journey (admin)
+  const me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
+  if(!me.email) return;
+  if(FU.journeysFor(me.email)[S.role]) return;            // already completed for this role
+  if(sessionStorage.getItem('auraa_jnudge_skip_'+S.role)) return; // skipped this session
+  const mc = document.getElementById('mainContent');
+  if(!mc || document.getElementById('journeyNudge')) return;
+  const card = document.createElement('div');
+  card.id = 'journeyNudge';
+  card.className = 'card';
+  card.style.cssText = 'border-color:var(--gold);background:linear-gradient(135deg,rgba(201,168,76,.12),rgba(10,92,54,.10));';
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem;">
+      <span style="font-size:1.4rem;">👋</span>
+      <div class="card-title" style="margin-bottom:0;color:var(--gold);">New here? Start with the 90-second journey</div>
+    </div>
+    <div style="font-size:.76rem;color:var(--muted);line-height:1.7;margin-bottom:.75rem;">
+      See exactly how AURAA works for you as a ${roleLabels[S.role]||S.role} — what the balance means, how trips flow, and how you earn. Takes about 90 seconds and earns you <strong style="color:var(--gold);">+100 Founding Points</strong>.
+    </div>
+    <button class="btn btn-gold" style="width:100%;margin-bottom:.45rem;" onclick="renderTab(${jIdx})">▶ Start the journey</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;" onclick="sessionStorage.setItem('auraa_jnudge_skip_${S.role}','1');document.getElementById('journeyNudge')?.remove();">Skip for now — I'll explore on my own</button>`;
+  mc.prepend(card);
 }
 
 // ═══════════════════════════════════════════════
@@ -5280,6 +5314,7 @@ function renderDriverEarnings(){
     <div class="wallet-balance">
       <div class="wallet-amount">₦${S.driverWallet.toLocaleString()}</div>
       <div class="wallet-label">Total Driver Earnings</div>
+      <div style="font-size:.62rem;color:var(--muted);margin-top:.25rem;">Demo balance from proof trips — test figures only, not real money, and not convertible at launch</div>
     </div>
     <div class="wallet-actions">
       <button class="btn btn-gold" onclick="driverWithdraw()">↑ Withdraw</button>
@@ -5485,17 +5520,10 @@ function renderOwnerMonitor(){
   const tripActive = trip && ['searching','accepted','active'].includes(trip.status)
       && (trip.ownerAuth || (pairing && trip.pairing && trip.pairing.id===pairing.id));
 
-  // No pairing yet → honest prompt to pair, not a fake live trip.
+  // No pairing yet → the pairing choice itself, right here. (v11.9.2 — was a
+  // stub pointing to the Dispatch tab; the trust decision belongs on Monitor.)
   if(!pairing){
-    mc.innerHTML=`
-    <div class="card" style="text-align:center;padding:1.5rem 1rem;">
-      <div style="font-size:2rem;margin-bottom:.5rem;">🚗</div>
-      <div class="card-title">No vehicle paired yet</div>
-      <div style="font-size:.78rem;color:var(--muted);line-height:1.7;margin-bottom:1rem;">
-        Approve a driver (or yourself) on the Dispatch tab to start monitoring trips on your vehicle.
-      </div>
-      <button class="btn btn-gold btn-sm" onclick="renderTab(2)">Go to pairing</button>
-    </div>`;
+    mc.innerHTML = _renderPairingCard(me, me.vehicle_type||'', me.plate||me.plate_number||'', null);
     return;
   }
 
@@ -5519,6 +5547,8 @@ function renderOwnerMonitor(){
           <div><span style="color:var(--muted);">Status:</span> <strong>No active trip</strong></div>
         </div>
         <div class="alert-row alert-ok" style="margin-top:.75rem;">✅ Vehicle idle — ready for trips.</div>
+        <button class="btn btn-outline btn-sm" style="width:100%;margin-top:.7rem;" onclick="clearPairing('${pairing.id}')">⇄ Change driver</button>
+        <div style="font-size:.6rem;color:var(--muted);margin-top:.35rem;text-align:center;">Clears the current pairing so you can approve yourself or another driver. Only available while the vehicle is idle.</div>
       </div>
     </div>
     ${_monitorGuardianCard()}
@@ -5770,23 +5800,16 @@ function cancelAssistRequest(){
 }
 
 function ownerWithdraw(){
-  if(S.ownerWallet<1000){showToast('No earnings to withdraw yet');return;}
-  const amt=Math.min(5000,S.ownerWallet);
-  S.ownerWallet-=amt;
-  localStorage.setItem('auraa_owner_wallet',S.ownerWallet);
-  logTx({title:'Withdrawal to Bank Account',amount:amt,type:'debit'});
-  showToast(`₦${amt.toLocaleString()} withdrawal initiated to your bank account`);
-  renderOwnerEarnings();
+  // v11.9.3 — Honest withdrawal state. The old path decremented the wallet and
+  // toasted "withdrawal initiated to your bank account" with NO bank linked and
+  // NO money moving — a fabricated success claim. Real founding-user feedback
+  // (11 Jun) caught it within minutes of registering. Nothing fake touches money.
+  showToast('This is a demo balance from proof trips — it isn\'t real money and can\'t be withdrawn. Real earnings and withdrawals begin with real trips at launch.');
 }
 
 function driverWithdraw(){
-  if(S.driverWallet<1000){showToast('Minimum withdrawal is ₦1,000');return;}
-  const amt=Math.min(5000,S.driverWallet);
-  S.driverWallet-=amt;
-  localStorage.setItem('auraa_driver_wallet',S.driverWallet);
-  logTx({title:'Withdrawal to Bank Account',amount:amt,type:'debit'});
-  showToast(`₦${amt.toLocaleString()} withdrawal initiated to your bank account`);
-  renderDriverEarnings();
+  // v11.9.3 — Same honest state as ownerWithdraw: no linked bank, no fake transfer.
+  showToast('This is a demo balance from proof trips — it isn\'t real money and can\'t be withdrawn. Real earnings and withdrawals begin with real trips at launch.');
 }
 
 function renderOwnerEarnings(){
@@ -5799,6 +5822,7 @@ function renderOwnerEarnings(){
     <div class="wallet-balance">
       <div class="wallet-amount">₦${S.ownerWallet.toLocaleString()}</div>
       <div class="wallet-label">Passive Earnings This Month</div>
+      <div style="font-size:.62rem;color:var(--muted);margin-top:.25rem;">Demo balance from proof trips — test figures only, not real money, and not convertible at launch</div>
     </div>
     <div class="wallet-actions">
       <button class="btn btn-gold" onclick="ownerWithdraw()">↑ Withdraw</button>
@@ -5901,7 +5925,7 @@ function pairSelf(){
     driver: { name: me.name, fu_number: me.fu_number },
     source: 'self'
   });
-  if(pairing){ showToast('✅ You are paired as the driver of your vehicle'); renderOwnerDispatch(); }
+  if(pairing){ showToast('✅ You are paired as the driver of your vehicle'); renderTab(S.tab); }
 }
 
 function pairKnownDriver(){
@@ -5916,7 +5940,7 @@ function pairKnownDriver(){
     driver: { name: name.trim(), fu_number: null },
     source: 'known'
   });
-  if(pairing){ showToast(`✅ ${name.trim()} approved as your driver`); renderOwnerDispatch(); }
+  if(pairing){ showToast(`✅ ${name.trim()} approved as your driver`); renderTab(S.tab); }
 }
 
 function pairProximityInfo(){
@@ -5926,8 +5950,8 @@ function pairProximityInfo(){
 function clearPairing(id){
   if(!id) return;
   PairingStore.remove(id);
-  showToast('Pairing cleared');
-  renderOwnerDispatch();
+  showToast('Pairing cleared — choose who drives next');
+  renderTab(S.tab); // v11.9.2 — re-render wherever you are (Monitor or Dispatch), not force Dispatch
 }
 
 // ═══════════════════════════════════════════════
@@ -7393,6 +7417,7 @@ function renderBikerEarnings(){
     <div class="wallet-balance">
       <div class="wallet-amount">₦${S.driverWallet.toLocaleString()}</div>
       <div class="wallet-label">${roleEmoji} ${roleLabel} Earnings</div>
+      <div style="font-size:.62rem;color:var(--muted);margin-top:.25rem;">Demo balance from proof trips — test figures only, not real money, and not convertible at launch</div>
     </div>
     <div class="wallet-actions">
       <button class="btn btn-gold" onclick="driverWithdraw()">↑ Withdraw</button>
