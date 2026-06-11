@@ -5458,9 +5458,23 @@ const PairingStore = {
       }));
     const unsynced = local.filter(p => !dbIds.has(p.id));
     unsynced.forEach(p => TripSync.writePairing(p)); // push strays up
-    this._save(merged.concat(unsynced));
-    if(merged.length || unsynced.length)
-      console.log('[PairingSync] hydrated:', merged.length, 'from DB,', unsynced.length, 'local pushed');
+    // v11.9.3 — Dedupe: one ACTIVE pairing per owner+vehicle, newest approval
+    // wins. Merging every device's history stacked duplicate active pairings,
+    // which made "Change driver" appear to need several taps.
+    const all = merged.concat(unsynced)
+      .sort((a,b)=> new Date(b.approvedAt||0) - new Date(a.approvedAt||0));
+    const seen = new Set(); const deduped = [];
+    for(const p of all){
+      if(p.status==='active'){
+        const k = (p.owner?.fu_number || p.owner?.name || '?') + '|' + (p.plate || '');
+        if(seen.has(k)){ TripSync.setPairingStatus(p.id, 'removed'); continue; }
+        seen.add(k);
+      }
+      deduped.push(p);
+    }
+    this._save(deduped);
+    if(deduped.length || unsynced.length)
+      console.log('[PairingSync] hydrated:', deduped.length, 'kept,', unsynced.length, 'local pushed');
   },
 };
 // v11.9.2 — Pull cross-device pairings once the page is up.
@@ -5949,7 +5963,18 @@ function pairProximityInfo(){
 
 function clearPairing(id){
   if(!id) return;
-  PairingStore.remove(id);
+  // v11.9.3 — Clear EVERY active pairing this owner holds, not just one row.
+  // Pairings created before cross-device sync stacked up (one per device/session),
+  // and hydrate faithfully merged them all — so removing one at a time meant the
+  // Change-driver button needed several taps before Monitor visibly changed.
+  const me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
+  const mine = PairingStore.list().filter(p =>
+    p.status==='active' && (
+      p.id===id ||
+      (me.fu_number && p.owner?.fu_number===me.fu_number) ||
+      (me.name && p.owner?.name===me.name)
+    ));
+  (mine.length ? mine : [{id}]).forEach(p => PairingStore.remove(p.id));
   showToast('Pairing cleared — choose who drives next');
   renderTab(S.tab); // v11.9.2 — re-render wherever you are (Monitor or Dispatch), not force Dispatch
 }
