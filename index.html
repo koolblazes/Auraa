@@ -1451,6 +1451,34 @@ const TripSync = (function(){
     return map;
   }
 
+  // v11.9.4 — VEHICLE WAITLIST. The carless driver is the supply AURAA exists
+  // to unlock; this is their first surface: "I need a vehicle." No matching is
+  // claimed — matching activates at launch. What this collects, honestly, is
+  // the demand signal: how many drivers are waiting for a car.
+  async function writeVehicleRequest(row){
+    const c = _getClient();
+    if(!c) return false;
+    const { error } = await c.from('vehicle_requests').upsert(row, { onConflict: 'email' });
+    if(error){ console.error('[VehicleWaitlist] write failed:', error); return false; }
+    return true;
+  }
+
+  async function getVehicleRequest(email){
+    const c = _getClient();
+    if(!c || !email) return null;
+    const { data, error } = await c.from('vehicle_requests').select('*').eq('email', email.toLowerCase()).maybeSingle();
+    if(error){ console.error('[VehicleWaitlist] fetch failed:', error); return null; }
+    return data;
+  }
+
+  async function countVehicleRequests(){
+    const c = _getClient();
+    if(!c) return null;
+    const { count, error } = await c.from('vehicle_requests').select('*', { count: 'exact', head: true });
+    if(error){ console.error('[VehicleWaitlist] count failed:', error); return null; }
+    return count ?? 0;
+  }
+
   async function writeSettlement(tripId, svc, legs){
     const c = _getClient();
     if(!c){ console.warn('[TripSync] client not ready — settlement local only'); return false; }
@@ -1471,7 +1499,8 @@ const TripSync = (function(){
   }
 
   return { writeTrip, updateTrip, fetchPendingTrips, fetchMyTrips, subscribeToTrips, writeSettlement,
-           writePairing, setPairingStatus, fetchPairings, fetchOwnerTrips, fetchOwnerShares };
+           writePairing, setPairingStatus, fetchPairings, fetchOwnerTrips, fetchOwnerShares,
+           writeVehicleRequest, getVehicleRequest, countVehicleRequests };
 })();
 
 // SUPABASE INTEGRATION — v11.2.0
@@ -5102,8 +5131,84 @@ function renderDriverTrips(){
     </div>`).join(''):''}
 
     ${!showProof && !showing.length?`<div class="empty-state" style="padding:1.5rem 0;"><div class="empty-icon">🚗</div>No incoming requests. Waiting for trips...</div>`:''}
-  </div>`;
+  </div>
+  <div id="vehicleWaitlist"></div>`;
   startCountdowns();
+  _loadVehicleWaitlist(); // v11.9.4
+}
+
+// ── VEHICLE WAITLIST — v11.9.4 ────────────────────────────────────────────
+// The other half of the owner's "Find drivers near me": the carless driver's
+// "I need a vehicle." This is the structural demand AURAA unlocks that
+// incumbents can't — a driver without a car has no surface on Uber/Bolt at
+// all. No matching is promised here; matching activates at launch. The list
+// is real, the count is real, and that count is the demand signal.
+async function _loadVehicleWaitlist(){
+  const box = document.getElementById('vehicleWaitlist');
+  if(!box) return;
+  const me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
+  const email = (me.email||'').toLowerCase();
+
+  const [existing, total] = await Promise.all([
+    email ? TripSync.getVehicleRequest(email) : null,
+    TripSync.countVehicleRequests()
+  ]);
+
+  const countLine = (total !== null && total > 0)
+    ? `<div style="font-size:.66rem;color:var(--gold);margin-top:.4rem;">🔑 ${total} driver${total>1?'s':''} on the vehicle list so far</div>` : '';
+
+  if(existing){
+    box.innerHTML = `
+    <div class="card" style="border-color:var(--gold);">
+      <div class="card-title" style="color:var(--gold);">🔑 You're on the vehicle list</div>
+      <div style="font-size:.75rem;color:var(--muted);line-height:1.7;">
+        Zone: <strong>${existing.zone||'—'}</strong> · Licence: <strong>${existing.licence_status==='valid'?'Valid':'In progress'}</strong><br>
+        When owner–driver matching activates at launch, drivers on this list are matched first with owner vehicles in their zone.
+      </div>
+      ${countLine}
+    </div>`;
+    return;
+  }
+
+  const zoneOpts = LAGOS_ZONES.map(z=>`<option value="${z}">${z}</option>`).join('');
+  box.innerHTML = `
+  <div class="card">
+    <div class="card-title">🔑 No car? AURAA's built for you.</div>
+    <div style="font-size:.75rem;color:var(--muted);line-height:1.7;margin-bottom:.7rem;">
+      Owners on AURAA approve trusted drivers to run their idle vehicles. Join the vehicle list and when matching activates at launch, you're matched with owner vehicles in your zone — first come, first matched.
+    </div>
+    <div style="font-size:.68rem;color:var(--muted);margin-bottom:.25rem;">Your zone</div>
+    <select id="vwZone" class="input" style="width:100%;margin-bottom:.6rem;">${zoneOpts}</select>
+    <div style="font-size:.68rem;color:var(--muted);margin-bottom:.25rem;">Driver's licence</div>
+    <select id="vwLicence" class="input" style="width:100%;margin-bottom:.7rem;">
+      <option value="valid">I have a valid licence</option>
+      <option value="in_progress">Getting one — in progress</option>
+    </select>
+    <button class="btn btn-gold" style="width:100%;" onclick="joinVehicleWaitlist()">Join the vehicle list</button>
+    <div style="font-size:.6rem;color:var(--muted);margin-top:.4rem;text-align:center;">Matching activates at launch — joining now sets your place in line.</div>
+    ${countLine}
+  </div>`;
+}
+
+async function joinVehicleWaitlist(){
+  const me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
+  if(!me.email){ showToast('Sign in as a founding user first so we can hold your place'); return; }
+  const zone = document.getElementById('vwZone')?.value || 'Other';
+  const licence = document.getElementById('vwLicence')?.value || 'valid';
+  const ok = await TripSync.writeVehicleRequest({
+    email: me.email.toLowerCase(),
+    driver_name: me.name || '',
+    driver_fu: me.fu_number || null,
+    zone,
+    licence_status: licence,
+    status: 'waiting'
+  });
+  if(ok){
+    showToast('🔑 You\'re on the vehicle list — your place is saved');
+    _loadVehicleWaitlist();
+  } else {
+    showToast('Couldn\'t reach the list — check connection and try again');
+  }
 }
 
 function startCountdowns(){
@@ -5874,6 +5979,7 @@ function renderOwnerEarnings(){
 function _renderPairingCard(me, vehicle, plate, active){
   const hasVehicle = !!(vehicle || plate);
   const vLabel = [vehicle, plate].filter(Boolean).join(' • ') || 'your vehicle';
+  setTimeout(_fillVwOwnerCount, 400); // v11.9.4 — async-fill the waitlist count once this card is in the DOM
 
   if(active){
     const srcLabel = active.driver.source === 'self' ? 'You (owner-driver)'
@@ -5925,8 +6031,21 @@ function _renderPairingCard(me, vehicle, plate, active){
     <button class="btn btn-outline" style="width:100%;text-align:left;opacity:.7;" onclick="pairProximityInfo()">
       📍 Find drivers near me
       <div style="font-size:.62rem;font-weight:400;color:var(--muted);margin-top:.1rem;">Drivers search for available vehicles nearby — activating at launch.</div>
+      <div id="vwOwnerCount" style="font-size:.62rem;font-weight:600;color:var(--gold);margin-top:.15rem;"></div>
     </button>
   </div>`;
+}
+
+// v11.9.4 — Fill the owner-side count from the real vehicle waitlist. An owner
+// deciding whether to list their car should see that drivers are already
+// waiting. Shows nothing if the count is zero or unreachable — never a fake number.
+async function _fillVwOwnerCount(){
+  try{
+    const el = document.getElementById('vwOwnerCount');
+    if(!el) return;
+    const n = await TripSync.countVehicleRequests();
+    if(n && n > 0) el.textContent = `🔑 ${n} driver${n>1?'s':''} already waiting for a vehicle`;
+  }catch(e){}
 }
 
 function pairSelf(){
