@@ -1498,9 +1498,72 @@ const TripSync = (function(){
     } catch(e){ console.error('[TripSync] settlement exception:', e); return false; }
   }
 
+
+  // ═══ v11.10.0 — OWNER PROTECTION LAYER ═══════════════════════════════════
+  // Three new surfaces the owner has asked for: a driver may REQUEST to drive a
+  // vehicle (owner accepts / rejects-with-reason / defers); the owner may set a
+  // DURATION of use on a pairing; and any party may file a manual trip REPORT.
+  // Automatic deviation detection still waits on Airtel M2M (labelled at launch);
+  // the manual report is its honest, live counterpart. Requires three Supabase
+  // tables (driver_requests, trip_reports) + two columns on pairings — see the
+  // SQL shipped with this build. Until those exist, writes return false and the
+  // UI degrades to "couldn't reach server", never a crash and never a fake row.
+
+  async function writeDriverRequest(row){
+    const c = _getClient();
+    if(!c){ console.warn('[OwnerProtect] client not ready — request local only'); return false; }
+    const { error } = await c.from('driver_requests').upsert(row, { onConflict: 'id' });
+    if(error){ console.error('[OwnerProtect] request write failed:', error); return false; }
+    console.log('[OwnerProtect] ✅ driver request synced:', row.id);
+    return true;
+  }
+  async function fetchDriverRequests(ownerFu, ownerName){
+    const c = _getClient();
+    if(!c) return null;
+    let q = c.from('driver_requests').select('*').order('created_at', { ascending: false }).limit(100);
+    if(ownerFu)        q = q.eq('owner_fu', ownerFu);
+    else if(ownerName) q = q.eq('owner_name', ownerName);
+    else return [];
+    const { data, error } = await q;
+    if(error){ console.error('[OwnerProtect] request fetch failed:', error); return null; }
+    return data || [];
+  }
+  async function setDriverRequestStatus(id, status, reason){
+    const c = _getClient();
+    if(!c) return false;
+    const patch = { status };
+    if(reason !== undefined) patch.reason = reason;
+    patch.decided_at = new Date().toISOString();
+    const { error } = await c.from('driver_requests').update(patch).eq('id', id);
+    if(error){ console.error('[OwnerProtect] request status failed:', error); return false; }
+    return true;
+  }
+  // Duration-of-use lives ON the pairing row (two nullable columns). Owner sets
+  // when/how long their vehicle may be driven. This is agreed terms both sides
+  // can see — the baseline any future automatic deviation check measures against.
+  async function setPairingDuration(id, duration){
+    const c = _getClient();
+    if(!c) return false;
+    const { error } = await c.from('pairings').update({
+      duration_window: duration.window || null,
+      duration_hours:  duration.hours  || null
+    }).eq('id', id);
+    if(error){ console.error('[OwnerProtect] duration set failed:', error); return false; }
+    return true;
+  }
+  async function writeTripReport(row){
+    const c = _getClient();
+    if(!c) return false;
+    const { error } = await c.from('trip_reports').insert(row);
+    if(error){ console.error('[OwnerProtect] report write failed:', error); return false; }
+    console.log('[OwnerProtect] ✅ trip report filed:', row.trip_id);
+    return true;
+  }
   return { writeTrip, updateTrip, fetchPendingTrips, fetchMyTrips, subscribeToTrips, writeSettlement,
            writePairing, setPairingStatus, fetchPairings, fetchOwnerTrips, fetchOwnerShares,
-           writeVehicleRequest, getVehicleRequest, countVehicleRequests };
+           writeVehicleRequest, getVehicleRequest, countVehicleRequests,
+           writeDriverRequest, fetchDriverRequests, setDriverRequestStatus,
+           setPairingDuration, writeTripReport };
 })();
 
 // SUPABASE INTEGRATION — v11.2.0
@@ -5187,7 +5250,38 @@ async function _loadVehicleWaitlist(){
     <button class="btn btn-gold" style="width:100%;" onclick="joinVehicleWaitlist()">Join the vehicle list</button>
     <div style="font-size:.6rem;color:var(--muted);margin-top:.4rem;text-align:center;">Matching activates at launch — joining now sets your place in line.</div>
     ${countLine}
+    <div style="border-top:1px solid var(--border);margin:.85rem 0 .7rem;"></div>
+    <div style="font-size:.72rem;color:var(--muted);line-height:1.6;margin-bottom:.5rem;">
+      Already know an owner? Request to drive their specific vehicle — it lands in their dashboard to accept or decline.
+    </div>
+    <button class="btn btn-outline btn-sm" style="width:100%;" onclick="driverRequestVehicle()">🤝 Request a specific owner's vehicle</button>
   </div>`;
+}
+
+// v11.10.0 — Driver asks a specific owner to drive their vehicle. Real: writes
+// a driver_request the owner sees in their inbox (accept / reject / defer).
+// No owner directory yet (that's matching, at launch), so the driver names the
+// owner they already know — honest to how first pairings actually form in Lagos.
+function driverRequestVehicle(){
+  const me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
+  if(!me.name){ showToast('Sign in first so the owner knows who is asking'); return; }
+  const ownerName = prompt("Owner's full name (someone who knows you and owns the vehicle):");
+  if(!ownerName || !ownerName.trim()) return;
+  const ownerFuRaw = prompt("Owner's Founding User number, if you know it (optional — helps route it to them). Leave blank to skip:", '');
+  if(ownerFuRaw === null) return;
+  const vehicle = prompt("Which vehicle? (e.g. 'Toyota Camry' — optional):", '') || '';
+  if(vehicle === null) return;
+  const note = prompt('A short note to the owner (optional):', '') || '';
+  if(note === null) return;
+  const req = DriverRequestStore.create({
+    vehicle: vehicle.trim(),
+    plate: '',
+    owner: { name: ownerName.trim(), fu_number: (ownerFuRaw.trim()||null) },
+    driver: { name: me.name, fu_number: me.fu_number || null },
+    note: note.trim()
+  });
+  if(req) showToast('🤝 Request sent to ' + ownerName.trim() + ' — they decide next');
+  else showToast('Could not send the request — try again');
 }
 
 async function joinVehicleWaitlist(){
@@ -5585,6 +5679,79 @@ const PairingStore = {
 // v11.9.2 — Pull cross-device pairings once the page is up.
 setTimeout(()=>{ try{ PairingStore.hydrate(); }catch(e){} }, 1500);
 
+// ═══ v11.10.0 — DRIVER REQUEST STORE ═══════════════════════════════════════
+// A carless (or additional) driver can REQUEST to drive a specific owner's
+// vehicle. The request lands in the owner's dashboard; the owner accepts
+// (which creates the real pairing), rejects with a reason, or defers. Mirrors
+// PairingStore: localStorage for instant local truth, Supabase for cross-device.
+const DriverRequestStore = {
+  _key: 'auraa_driver_requests',
+  _all(){ try { return JSON.parse(localStorage.getItem(this._key)||'[]'); } catch(e){ return []; } },
+  _save(l){ localStorage.setItem(this._key, JSON.stringify(l)); },
+
+  // A driver asks to drive an owner's vehicle. status: pending → accepted|rejected|deferred
+  create({ vehicle, plate, owner, driver, note }){
+    if(!owner || !driver) return null;
+    const req = {
+      id: 'DR-' + Date.now() + '-' + Math.random().toString(36).slice(2,6).toUpperCase(),
+      vehicle: vehicle || '', plate: plate || '',
+      owner_name: owner.name || '', owner_fu: owner.fu_number || null,
+      driver_name: driver.name || '', driver_fu: driver.fu_number || null,
+      note: note || '', reason: '',
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      decided_at: null
+    };
+    const l = this._all(); l.unshift(req); this._save(l);
+    if(typeof TripSync !== 'undefined') TripSync.writeDriverRequest(req);
+    return req;
+  },
+
+  // Owner's inbox: requests addressed to this owner. Local + (hydrated) DB.
+  forOwner(ownerFu, ownerName){
+    return this._all().filter(r =>
+      (ownerFu && r.owner_fu === ownerFu) ||
+      (!ownerFu && ownerName && r.owner_name === ownerName));
+  },
+  pendingForOwner(ownerFu, ownerName){
+    return this.forOwner(ownerFu, ownerName).filter(r => r.status === 'pending' || r.status === 'deferred');
+  },
+
+  _set(id, status, reason){
+    const l = this._all(); const r = l.find(x=>x.id===id);
+    if(r){ r.status = status; if(reason!==undefined) r.reason = reason; r.decided_at = new Date().toISOString(); this._save(l); }
+    if(typeof TripSync !== 'undefined') TripSync.setDriverRequestStatus(id, status, reason);
+    return r;
+  },
+  accept(id){ return this._set(id, 'accepted'); },
+  reject(id, reason){ return this._set(id, 'rejected', reason || ''); },
+  defer(id){ return this._set(id, 'deferred'); },
+
+  async hydrate(ownerFu, ownerName){
+    if(typeof TripSync === 'undefined') return;
+    const rows = await TripSync.fetchDriverRequests(ownerFu, ownerName);
+    if(rows === null) return; // offline — keep local
+    const local = this._all();
+    const dbIds = new Set(rows.map(r=>r.id));
+    const kept  = local.filter(r => !dbIds.has(r.id)); // local-only (not yet synced)
+    kept.forEach(r => TripSync.writeDriverRequest(r));  // push strays up
+    const merged = rows.concat(kept)
+      .sort((a,b)=> new Date(b.created_at||0) - new Date(a.created_at||0));
+    this._save(merged);
+  }
+};
+
+// Duration-of-use: set agreed availability on the active pairing. Stored locally
+// and mirrored to the pairing row. This is the "agreed terms" both sides see —
+// and the baseline any future automatic deviation check will measure against.
+PairingStore.setDuration = function(id, duration){
+  const l = this._all(); const p = l.find(x=>x.id===id);
+  if(p){ p.duration = duration; this._save(l);
+    if(typeof TripSync !== 'undefined') TripSync.setPairingDuration(id, duration); }
+  return p;
+};
+
+
 // ── UNIFIED DRIVER SYSTEM ─────────────────────────────────────────────────
 const DRIVER_TYPES = {
   car:      { label:'Car Driver',     icon:'🚗', badge:'badge-green' },
@@ -5642,7 +5809,8 @@ function renderOwnerMonitor(){
   // No pairing yet → the pairing choice itself, right here. (v11.9.2 — was a
   // stub pointing to the Dispatch tab; the trust decision belongs on Monitor.)
   if(!pairing){
-    mc.innerHTML = _renderPairingCard(me, me.vehicle_type||'', me.plate||me.plate_number||'', null);
+    mc.innerHTML = _ownerRequestInbox(me)
+      + _renderPairingCard(me, me.vehicle_type||'', me.plate||me.plate_number||'', null);
     return;
   }
 
@@ -5670,6 +5838,8 @@ function renderOwnerMonitor(){
         <div style="font-size:.6rem;color:var(--muted);margin-top:.35rem;text-align:center;">Clears the current pairing so you can approve yourself or another driver. Only available while the vehicle is idle.</div>
       </div>
     </div>
+    ${_ownerRequestInbox(me)}
+    ${_ownerDurationCard(pairing)}
     ${_monitorGuardianCard()}
     <div id="ownerTripLog"></div>`;
     _loadOwnerTripLog(me, pairing);
@@ -5695,11 +5865,144 @@ function renderOwnerMonitor(){
         <div class="eta-item"><div class="eta-val">—</div><div class="eta-lbl">ETA</div></div>
       </div>
       <div class="alert-row" style="background:rgba(201,168,76,.08);color:var(--gold);margin-top:.75rem;font-size:.7rem;">📡 Live speed, GPS & geofence activate at launch (Airtel M2M)</div>
+      ${_ownerReportButton(trip, pairing)}
     </div>
   </div>
+  ${_ownerDurationCard(pairing)}
   ${_monitorGuardianCard()}
   <div id="ownerTripLog"></div>`;
   _loadOwnerTripLog(me, pairing);
+}
+
+// ═══ v11.10.0 — DRIVER REQUEST INBOX (owner side) ═════════════════════════
+// Requests from drivers who want to drive this owner's vehicle. Owner accepts
+// (creates the real pairing), rejects with a reason, or defers. This is the
+// inbound trust decision the owner asked for — the mirror of the driver's
+// "I want to drive a vehicle". Real & functional now (writes to Supabase).
+function _ownerRequestInbox(me){
+  const ownerFu = me?.fu_number || null, ownerName = me?.name || null;
+  if(!ownerFu && !ownerName) return '';
+  // Kick a hydrate so cross-device requests appear, then re-render once.
+  if(typeof DriverRequestStore!=='undefined'){
+    DriverRequestStore.hydrate(ownerFu, ownerName).then(()=>{
+      const host = document.getElementById('ownerReqInbox');
+      if(host) host.outerHTML = _ownerRequestInbox(me);
+    }).catch(()=>{});
+  }
+  const reqs = (typeof DriverRequestStore!=='undefined')
+      ? DriverRequestStore.pendingForOwner(ownerFu, ownerName) : [];
+  if(!reqs.length){
+    return `<div id="ownerReqInbox"></div>`; // nothing pending — stay quiet
+  }
+  const rows = reqs.map(r => {
+    const veh = [r.vehicle, r.plate].filter(Boolean).join(' • ') || 'your vehicle';
+    const deferred = r.status === 'deferred';
+    return `
+    <div style="background:var(--dark3);border-radius:10px;padding:.7rem .85rem;margin-top:.55rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;">
+        <div><strong>${r.driver_name||'A driver'}</strong> <span style="color:var(--muted);font-size:.72rem;">wants to drive ${veh}</span></div>
+        ${deferred?'<span class="badge" style="background:rgba(201,168,76,.15);color:var(--gold);">Deferred</span>':''}
+      </div>
+      ${r.note?`<div style="font-size:.7rem;color:var(--muted);margin-top:.35rem;">"${r.note}"</div>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-top:.6rem;">
+        <button class="btn btn-gold btn-sm" onclick="ownerAcceptRequest('${r.id}')">✓ Accept</button>
+        <button class="btn btn-outline btn-sm" onclick="ownerRejectRequest('${r.id}')">✕ Reject</button>
+        <button class="btn btn-outline btn-sm" onclick="ownerDeferRequest('${r.id}')" ${deferred?'disabled style="opacity:.5;"':''}>⏳ Later</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `
+  <div id="ownerReqInbox" class="card" style="border-color:var(--gold);">
+    <div class="card-title" style="color:var(--gold);">Drivers requesting your vehicle <span style="background:var(--gold);color:#000;border-radius:999px;padding:.05rem .5rem;font-size:.7rem;">${reqs.length}</span></div>
+    <div style="font-size:.7rem;color:var(--muted);line-height:1.6;">You decide. Accept to pair them, reject with a reason, or defer to decide later.</div>
+    ${rows}
+  </div>`;
+}
+function ownerAcceptRequest(id){
+  const r = DriverRequestStore._all().find(x=>x.id===id); if(!r) return;
+  DriverRequestStore.accept(id);
+  const me = IdentityStore.current() || {};
+  // Accepting a request creates the real owner-approved pairing.
+  PairingStore.approve({
+    vehicle: r.vehicle || me.vehicle_type || '',
+    plate:   r.plate   || me.plate || me.plate_number || '',
+    owner:  { name: r.owner_name || me.name, fu_number: r.owner_fu || me.fu_number },
+    driver: { name: r.driver_name, fu_number: r.driver_fu },
+    source: 'known'
+  });
+  showToast('✅ ' + (r.driver_name||'Driver') + ' approved and paired');
+  renderTab(S.tab);
+}
+function ownerRejectRequest(id){
+  const reason = prompt('Reason for rejection (the driver will see this — keep it fair):');
+  if(reason === null) return; // cancelled
+  DriverRequestStore.reject(id, reason.trim());
+  showToast('Request rejected' + (reason.trim()?' — reason recorded':''));
+  renderTab(S.tab);
+}
+function ownerDeferRequest(id){
+  DriverRequestStore.defer(id);
+  showToast('Deferred — you can decide later');
+  renderTab(S.tab);
+}
+
+// ═══ v11.10.0 — DURATION OF USE (owner side) ══════════════════════════════
+// Owner sets the agreed window/hours their vehicle may be driven under this
+// pairing. Real & functional now (stored on the pairing, synced). The
+// AUTOMATIC "went past the agreed duration" alert waits on telematics —
+// labelled at launch; the owner's manual report below is its live counterpart.
+function _ownerDurationCard(pairing){
+  if(!pairing) return '';
+  const d = pairing.duration || {};
+  const cur = (d.window || d.hours)
+    ? `<strong style="color:var(--gold);">${[d.window, d.hours?d.hours+'h/day':''].filter(Boolean).join(' · ')}</strong>`
+    : '<span style="color:var(--muted);">Not set — vehicle available anytime</span>';
+  return `
+  <div class="card">
+    <div class="card-title">Agreed duration of use</div>
+    <div style="font-size:.78rem;line-height:1.7;">Current: ${cur}</div>
+    <div style="font-size:.66rem;color:var(--muted);line-height:1.55;margin-top:.3rem;">
+      The terms you and your driver agree on. Automatic alerts if a trip runs past this window activate with telematics at launch — until then, use “Report an issue” below.
+    </div>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:.6rem;" onclick="ownerSetDuration('${pairing.id}')">Set duration</button>
+  </div>`;
+}
+function ownerSetDuration(id){
+  const win = prompt('Available window (e.g. "Mon–Fri, 8am–6pm"). Leave blank to skip:', '');
+  if(win === null) return;
+  const hrsRaw = prompt('Max hours per day (number, e.g. 8). Leave blank to skip:', '');
+  if(hrsRaw === null) return;
+  const hours = hrsRaw.trim() ? Math.max(0, parseInt(hrsRaw.trim(),10)||0) : null;
+  PairingStore.setDuration(id, { window: win.trim() || null, hours });
+  showToast('✅ Duration of use saved');
+  renderTab(S.tab);
+}
+
+// ═══ v11.10.0 — MANUAL TRIP REPORT (owner side) ═══════════════════════════
+// The honest, LIVE counterpart to automatic deviation detection: any time the
+// owner sees something wrong, one button files a persisted report. No fake
+// automatic alerts — this is the real accountability lever available today.
+function _ownerReportButton(trip, pairing){
+  return `
+  <button class="btn btn-outline btn-sm" style="width:100%;margin-top:.6rem;color:var(--danger,#c0392b);border-color:var(--danger,#c0392b);" onclick="ownerReportIssue('${(pairing&&pairing.id)||''}')">
+    ⚠ Report an issue with this trip
+  </button>`;
+}
+function ownerReportIssue(pairingId){
+  const me = IdentityStore.current() || {};
+  const what = prompt('What happened? (e.g. "drove outside the agreed area", "kept the car longer than agreed")');
+  if(!what || !what.trim()) return;
+  const trip = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
+  const row = {
+    id: 'RP-' + Date.now() + '-' + Math.random().toString(36).slice(2,6).toUpperCase(),
+    trip_id: (trip && (trip._supabase_uuid || trip.id)) || null,
+    pairing_id: pairingId || null,
+    owner_name: me.name || null, owner_fu: me.fu_number || null,
+    detail: what.trim(),
+    created_at: new Date().toISOString()
+  };
+  if(typeof TripSync!=='undefined') TripSync.writeTripReport(row);
+  showToast('⚠ Report filed — thank you. This is logged against the trip.');
 }
 
 // Guardian card — design shown, live-only tiles labelled honestly.
