@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>AURAA Technologies — MVP v11.5.0</title>
+<title>AURAA Technologies — MVP v11.11.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <!-- v11.2.2 — Rescue path for trapped pre-v11.2.1 users -->
 <!-- v11.3.0 — Flutterwave inline SDK + verified wallet funding -->
@@ -939,7 +939,7 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
           </svg>
         </div>
         <div class="r2-tile-name">Vehicle Owner</div>
-        <div class="r2-tile-desc">Activate ASSIST · monitor fleet</div>
+        <div class="r2-tile-desc">List your car · approve drivers · earn</div>
       </div>
       <div class="r2-tile" onclick="selectRole('biker')" role="button" aria-label="Continue as Bike Rider">
         <div class="r2-tile-icon">
@@ -7634,9 +7634,10 @@ function journeyOwner(me){
   const mc = document.getElementById('mainContent');
   const existingPhoto = FU.getPhoto(me.email, 'vehicle');
   mc.innerHTML = `
-  ${journeyHeader('owner','Step 1 of 4 · Onboard your vehicle','90s sim')}
+  ${journeyHeader('owner','GO · Step 1 of 6 · List your vehicle','90s sim')}
   <div class="card">
-    <div class="card-title">📸 Upload Vehicle Photo</div>
+    <div class="card-title">📸 List Your Vehicle on AURAA GO</div>
+    <div class="jrn-step-hint">AURAA GO is our flagship: you make your vehicle available, vetted drivers apply, and you choose who drives. You stay in control and earn from every trip. Let's walk through it — then we'll show you ASSIST too.</div>
     <div id="ownerPhotoArea" class="photo-upload-area${existingPhoto?' has-photo':''}" onclick="document.getElementById('ownerPhotoInput').click()">
       ${existingPhoto
         ? `<img src="${existingPhoto}" class="photo-thumb" alt="Vehicle"/>`
@@ -7653,8 +7654,84 @@ function journeyOwner(me){
       <label class="form-label">PLATE</label>
       <input class="form-input" id="ownerVehPlate" value="LAG-234-KA" readonly/>
     </div>
-    <button class="btn btn-gold" onclick="_journeyOwnerBookAssist()">Next: Book Assist →</button>
+    <button class="btn btn-gold" onclick="_journeyOwnerMakeAvailable()">Next: Make Available for GO →</button>
   </div>`;
+}
+
+// GO Step 2 — Owner makes vehicle available; a vetted driver requests it.
+// The AURAA trust loop: the owner approves the driver. Flagship moment.
+function _journeyOwnerMakeAvailable(){
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = `
+  ${journeyHeader('owner','GO · Step 2 of 6 · A vetted driver applies','75s')}
+  <div class="card" style="border-color:var(--gold);">
+    <div class="card-title" style="color:var(--gold);">🚗 Vehicle Available for GO <span class="badge" style="background:var(--dark3);color:var(--muted);font-weight:600;font-size:.58rem;">EXAMPLE</span></div>
+    <div class="jrn-step-hint">Your Toyota Camry is now listed. A vetted driver has applied to drive it. The decision is yours — this is the AURAA trust layer.</div>
+    <div class="jrn-driver-card">
+      <div class="jrn-driver-avatar">🧑🏾‍✈️</div>
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--text);font-size:.95rem;">Emeka Okafor</div>
+        <div style="font-size:.7rem;color:var(--muted);line-height:1.6;">4.9⭐ · 212 trips · ✓ Vetted &amp; background-checked</div>
+        <div style="font-size:.62rem;color:var(--gold);margin-top:.15rem;">Verification &amp; checks activate at launch</div>
+      </div>
+    </div>
+    <button class="btn btn-gold" style="width:100%;" onclick="_journeyOwnerApprove()">✓ Approve Emeka to drive my car</button>
+    <div style="font-size:.62rem;color:var(--muted);margin-top:.4rem;text-align:center;">You can revoke approval any time the vehicle is idle.</div>
+  </div>`;
+}
+
+// GO Step 3 — Approved driver runs a GO trip; owner earns the GO owner share (25%).
+// Button leads into ASSIST leg, NOT journeyComplete (completion is terminal, fires once at the end).
+function _journeyOwnerApprove(){
+  const mc = document.getElementById('mainContent');
+  const fare = 5800;
+  const splits = getSplits('go', fare, {}); // GO: Driver 55 / Owner 25 / Platform 20
+  const ownerShare = splits[1].v;
+
+  mc.innerHTML = `
+  ${journeyHeader('owner','GO · Step 3 of 6 · Your car is earning','60s')}
+  <div class="card" style="border-color:var(--gold);">
+    <div class="card-title" style="color:var(--gold);">🟢 GO Trip Active <span class="badge" style="background:var(--dark3);color:var(--muted);font-weight:600;font-size:.58rem;">EXAMPLE</span></div>
+    <div style="font-size:.8rem;line-height:1.8;margin-bottom:.7rem;">
+      <div><span style="color:var(--muted);">Driver:</span> <strong>Emeka Okafor</strong> <span class="badge badge-green">✓ Owner-approved</span></div>
+      <div><span style="color:var(--muted);">Your vehicle:</span> <strong>Toyota Camry · LAG-234-KA</strong></div>
+      <div><span style="color:var(--muted);">Route:</span> <strong>Ikeja → Lekki Phase 1</strong></div>
+      <div><span style="color:var(--muted);">Fare:</span> <strong style="color:var(--gold);">₦${fare.toLocaleString()}</strong></div>
+    </div>
+    <div class="loyalty-live"><div class="loyalty-live-lbl">Owner Share (25%)</div><div class="loyalty-live-val" id="loyaltyVal">₦0</div></div>
+    <div class="progress-bar-wrap" style="margin-top:.75rem;"><div class="progress-bar" id="jOwProg" style="width:0%;"></div></div>
+  </div>`;
+
+  let p = 0;
+  const iv = setInterval(()=>{
+    p += 5;
+    const pb = document.getElementById('jOwProg');
+    const lv = document.getElementById('loyaltyVal');
+    if(pb) pb.style.width = p+'%';
+    if(lv){ const acc = Math.round(ownerShare * (p/100)); lv.textContent = '₦'+acc.toLocaleString(); lv.classList.add('pulse'); setTimeout(()=>lv.classList.remove('pulse'), 200); }
+    if(p >= 100){
+      clearInterval(iv);
+      S.ownerWallet += ownerShare;
+      localStorage.setItem('auraa_owner_wallet', S.ownerWallet);
+      logTx({title:`GO Owner Share (25%) — Ikeja → Lekki`, amount:ownerShare, type:'credit'});
+      mc.innerHTML = `
+      ${journeyHeader('owner','GO · Step 3 complete · owner share credited','✓')}
+      <div class="card" style="border-color:var(--success);text-align:center;padding:1.3rem 1rem;">
+        <div style="font-size:2.3rem;margin-bottom:.4rem;">🎉</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--success);font-size:1.05rem;">GO Trip Completed</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--gold);font-size:1.7rem;margin:.4rem 0;">+₦${ownerShare.toLocaleString()}</div>
+        <div style="font-size:.72rem;color:var(--muted);margin-bottom:.75rem;">Owner Share (25%) added to your wallet</div>
+        <div class="card-title">GO Split</div>
+        ${splits.map(s=>`<div class="split-row"><span class="split-label">${s.l}</span><span class="split-val">₦${s.v.toLocaleString()}</span></div>`).join('')}
+        <div style="background:linear-gradient(90deg,rgba(10,92,54,.18),rgba(201,168,76,.08));border:1px solid var(--gold);border-radius:10px;padding:.7rem .8rem;margin-top:.9rem;font-size:.72rem;line-height:1.6;">
+          That's GO. Now see the other way owners earn — <strong style="color:var(--gold);">AURAA ASSIST</strong>: a professional driver dispatched to operate your car for a trip <em>you</em> requested.
+        </div>
+        <div style="margin-top:.9rem;">
+          <button class="btn btn-gold" style="width:100%;" onclick="_journeyOwnerAssist()">Next: See AURAA ASSIST →</button>
+        </div>
+      </div>`;
+    }
+  }, 200);
 }
 
 function _journeyOwnerPhoto(e){
@@ -7674,61 +7751,74 @@ function _journeyOwnerPhoto(e){
   reader.readAsDataURL(f);
 }
 
-function _journeyOwnerBookAssist(){
+// ASSIST Step 1 (Step 4 of 6) — intro / activate. Reached from the GO leg.
+function _journeyOwnerAssist(){
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = `
+  ${journeyHeader('owner','ASSIST · Step 4 of 6 · Dispatch a driver for your own trip','75s')}
+  <div class="card" style="border-color:var(--gold);">
+    <div class="card-title" style="color:var(--gold);">🔑 AURAA ASSIST</div>
+    <div class="jrn-step-hint">ASSIST is our global exclusive: a professional driver is dispatched to operate <em>your own vehicle</em> for a trip you're taking. You ride in your car; a vetted driver handles the wheel. You earn an owner share on top.</div>
+    <div style="background:var(--dark2);border:1px solid var(--border);border-radius:12px;padding:.85rem;margin-bottom:.7rem;font-size:.8rem;line-height:1.8;">
+      <div><span style="color:var(--muted);">Your vehicle:</span> <strong>Toyota Camry · LAG-234-KA</strong></div>
+      <div><span style="color:var(--muted);">Driver assigned:</span> <strong>Emeka Okafor</strong> <span class="badge badge-green">✓ Vetted</span></div>
+      <div><span style="color:var(--muted);">Trip:</span> <strong>Victoria Island → Lekki Phase 1</strong></div>
+    </div>
+    <button class="btn btn-gold" style="width:100%;" onclick="_journeyOwnerAssistRun()">Activate ASSIST →</button>
+  </div>`;
+}
+
+// ASSIST Step 2 (Steps 5-6 of 6) — run trip, credit 30%, then TERMINAL journeyComplete.
+function _journeyOwnerAssistRun(){
   const me = IdentityStore.current();
   const mc = document.getElementById('mainContent');
-  const fare = 5800;
-  const _bikeOwnership = me?.bike_ownership || Onboarding.owners().find(o=>o.email===me?.email)?.bike_ownership || 'self';
-  const splits = getSplits('assist', fare, {bikeOwnership: _bikeOwnership}); // v11: Driver 50 / Owner 30 / Platform 20 (ctx threaded for consistency; 'assist' split is ownership-agnostic)
-  const ownerShare = splits[1].v; // Vehicle Owner (30%)
+  const fare = 6200;
+  const _bikeOwnership = me?.bike_ownership || (typeof Onboarding!=='undefined' && Onboarding.owners?.().find(o=>o.email===me?.email)?.bike_ownership) || 'self';
+  const splits = getSplits('assist', fare, {bikeOwnership:_bikeOwnership}); // ASSIST: Driver 50 / Owner 30 / Platform 20
+  const ownerShare = splits[1].v; // Owner 30%
 
   mc.innerHTML = `
-  ${journeyHeader('owner','Step 2 of 4 · Assist request active','70s')}
+  ${journeyHeader('owner','ASSIST · Step 5 of 6 · Trip in progress','60s')}
   <div class="card" style="border-color:var(--gold);">
-    <div class="card-title" style="color:var(--gold);">🔑 AURAA ASSIST Active <span class="badge" style="background:var(--dark3);color:var(--muted);font-weight:600;font-size:.58rem;">EXAMPLE</span></div>
+    <div class="card-title" style="color:var(--gold);">🔑 ASSIST Active <span class="badge" style="background:var(--dark3);color:var(--muted);font-weight:600;font-size:.58rem;">EXAMPLE</span></div>
     <div style="font-size:.8rem;line-height:1.8;margin-bottom:.7rem;">
       <div><span style="color:var(--muted);">Driver:</span> <strong>Emeka Okafor</strong></div>
       <div><span style="color:var(--muted);">Your vehicle:</span> <strong>Toyota Camry · LAG-234-KA</strong></div>
       <div><span style="color:var(--muted);">Fare:</span> <strong style="color:var(--gold);">₦${fare.toLocaleString()}</strong></div>
     </div>
-    <div style="background:linear-gradient(90deg,rgba(10,92,54,.18),rgba(201,168,76,.08));border:1px solid var(--green);border-radius:10px;padding:.55rem .75rem;margin-bottom:.6rem;font-size:.72rem;">
-      🛡️ <strong>Trip-Based Insurance Active</strong> · cover runs trip-start → trip-end
-    </div>
-    <div class="loyalty-live">
-      <div class="loyalty-live-lbl">Owner Share (30%)</div>
-      <div class="loyalty-live-val" id="loyaltyVal">₦0</div>
-    </div>
-    <div class="progress-bar-wrap" style="margin-top:.75rem;"><div class="progress-bar" id="jOwProg" style="width:0%;"></div></div>
+    <div style="background:linear-gradient(90deg,rgba(10,92,54,.18),rgba(201,168,76,.08));border:1px solid var(--green);border-radius:10px;padding:.55rem .75rem;margin-bottom:.6rem;font-size:.72rem;">🛡️ <strong>Trip-Based Insurance</strong> · cover runs trip-start → trip-end · activates at launch</div>
+    <div class="loyalty-live"><div class="loyalty-live-lbl">Owner Share (30%)</div><div class="loyalty-live-val" id="loyaltyVal2">₦0</div></div>
+    <div class="progress-bar-wrap" style="margin-top:.75rem;"><div class="progress-bar" id="jOwProg2" style="width:0%;"></div></div>
   </div>`;
 
   let p = 0;
   const iv = setInterval(()=>{
     p += 5;
-    const pb = document.getElementById('jOwProg');
-    const lv = document.getElementById('loyaltyVal');
+    const pb = document.getElementById('jOwProg2');
+    const lv = document.getElementById('loyaltyVal2');
     if(pb) pb.style.width = p+'%';
-    if(lv){
-      const acc = Math.round(ownerShare * (p/100));
-      lv.textContent = '₦'+acc.toLocaleString();
-      lv.classList.add('pulse');
-      setTimeout(()=>lv.classList.remove('pulse'), 200);
-    }
+    if(lv){ const acc = Math.round(ownerShare * (p/100)); lv.textContent = '₦'+acc.toLocaleString(); lv.classList.add('pulse'); setTimeout(()=>lv.classList.remove('pulse'), 200); }
     if(p >= 100){
       clearInterval(iv);
       S.ownerWallet += ownerShare;
       localStorage.setItem('auraa_owner_wallet', S.ownerWallet);
-      logTx({title:`Assist Owner Share (30%)`, amount:ownerShare, type:'credit'});
+      logTx({title:`ASSIST Owner Share (30%) — VI → Lekki`, amount:ownerShare, type:'credit'});
       mc.innerHTML = `
-      ${journeyHeader('owner','Step 4 of 4 · Trip complete — owner share credited','done')}
-      <div class="card" style="border-color:var(--success);text-align:center;padding:1.5rem 1rem;">
-        <div style="font-size:2.5rem;margin-bottom:.5rem;">🎉</div>
-        <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--success);font-size:1.1rem;">Assist Completed</div>
-        <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--gold);font-size:1.8rem;margin:.5rem 0;">+₦${ownerShare.toLocaleString()}</div>
-        <div style="font-size:.72rem;color:var(--muted);margin-bottom:.85rem;">Owner Share (30%) added to your wallet</div>
-        <div class="card-title">Full Split</div>
+      ${journeyHeader('owner','ASSIST · Step 6 of 6 · Both models complete','done')}
+      <div class="card" style="border-color:var(--success);text-align:center;padding:1.4rem 1rem;">
+        <div style="font-size:2.4rem;margin-bottom:.4rem;">🎉</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--success);font-size:1.05rem;">ASSIST Completed</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;color:var(--gold);font-size:1.7rem;margin:.4rem 0;">+₦${ownerShare.toLocaleString()}</div>
+        <div style="font-size:.72rem;color:var(--muted);margin-bottom:.75rem;">Owner Share (30%) added to your wallet</div>
+        <div class="card-title">ASSIST Split</div>
         ${splits.map(s=>`<div class="split-row"><span class="split-label">${s.l}</span><span class="split-val">₦${s.v.toLocaleString()}</span></div>`).join('')}
-        <div style="margin-top:1rem;">
-          <button class="btn btn-gold" onclick="journeyComplete('owner')">Continue →</button>
+        <div style="background:var(--dark2);border:1px solid var(--gold);border-radius:10px;padding:.7rem .8rem;margin-top:.9rem;font-size:.72rem;line-height:1.7;text-align:left;">
+          <strong style="color:var(--gold);">You've now seen both owner models:</strong><br>
+          • <strong>GO</strong> — list your car, approve a driver, earn 25% passively<br>
+          • <strong>ASSIST</strong> — dispatch a driver for your own trips, earn 30%
+        </div>
+        <div style="margin-top:.9rem;">
+          <button class="btn btn-gold" style="width:100%;" onclick="journeyComplete('owner')">Finish → Go to my dashboard</button>
         </div>
       </div>`;
     }
