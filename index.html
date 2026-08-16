@@ -1654,6 +1654,13 @@ const SupabaseSync = (function(){
       pledge_on: !!(pledge && pledge.on),
       pledge_pct: (pledge && pledge.on) ? (pledge.pct || null) : null,
       referrer: null,
+      // v11.11.1 — Vehicle details (nullable; columns must exist in Supabase)
+      vehicle_type:  identity.vehicle_type  || null,
+      vehicle_make:  identity.vehicle_make  || null,
+      vehicle_model: identity.vehicle_model || null,
+      vehicle_year:  identity.vehicle_year  || null,
+      vehicle_color: identity.vehicle_color || null,
+      plate_number:  identity.plate_number  || null,
     };
   }
 
@@ -2505,6 +2512,10 @@ function requireIdentity(purpose, opts){
       pledge_pct: 5,
       // v10.7 hotfix 8 — onboarding extras
       vehicle_type: '',      // Owner only
+      vehicle_make: '',      // Owner only — e.g. 'Toyota'
+      vehicle_model: '',     // Owner only — e.g. 'Camry'
+      vehicle_year: '',      // Owner only — e.g. '2020'
+      vehicle_color: '',     // Owner only — e.g. 'Silver'
       plate_number: '',      // Owner only
       bike_ownership: '',    // Owner-Motorcycle only: 'self' | 'fleet'
       skater_drives: undefined, // Skater only (true/false/undefined)
@@ -2751,9 +2762,10 @@ function requireIdentity(purpose, opts){
       };
     }
 
-    // v10.7 hotfix 8 — Owner-only: vehicle type + plate number
+    // v11.11.1 — Owner vehicle: type + make/model/year/color + plate
     function stepOwnerVehicle(){
       const types = ['Sedan / Saloon', 'SUV', 'Motorcycle', 'Bicycle'];
+      const isCar = (t)=> t==='Sedan / Saloon' || t==='SUV';
       // v11 — Motorcycle owners split into two tracks: self-owned vs fleet-operated
       const bikeOwnershipBlock = `
         <div id="wizBikeOwnWrap" style="display:${state.vehicle_type==='Motorcycle'?'block':'none'};margin-bottom:.9rem;">
@@ -2771,7 +2783,7 @@ function requireIdentity(purpose, opts){
         </div>`;
       return {
         title: 'Tell us about your vehicle.',
-        hint: 'This helps us match you with the right driver pool. You can update these later.',
+        hint: 'Riders see this when they book — accurate details build trust. You can update later.',
         body: `
           <div style="font-size:.7rem;color:var(--muted);margin-bottom:.4rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Vehicle type</div>
           <div class="jrn-chip-grid" id="wizVehType" style="margin-bottom:.9rem;">
@@ -2781,6 +2793,28 @@ function requireIdentity(purpose, opts){
               </button>`).join('')}
           </div>
           ${bikeOwnershipBlock}
+          <div id="wizVehDetailsWrap" style="display:${isCar(state.vehicle_type)||state.vehicle_type==='Motorcycle'?'block':'none'};">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem;margin-bottom:.55rem;">
+              <div>
+                <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Make</div>
+                <input class="ig-input" id="wizVehMake" placeholder="e.g. Toyota" value="${(state.vehicle_make||'').replace(/"/g,'&quot;')}"/>
+              </div>
+              <div>
+                <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Model</div>
+                <input class="ig-input" id="wizVehModel" placeholder="e.g. Camry" value="${(state.vehicle_model||'').replace(/"/g,'&quot;')}"/>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem;margin-bottom:.55rem;">
+              <div>
+                <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Year</div>
+                <input class="ig-input" id="wizVehYear" placeholder="e.g. 2020" value="${(state.vehicle_year||'').replace(/"/g,'&quot;')}" type="number" min="1990" max="2027"/>
+              </div>
+              <div>
+                <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Color</div>
+                <input class="ig-input" id="wizVehColor" placeholder="e.g. Silver" value="${(state.vehicle_color||'').replace(/"/g,'&quot;')}"/>
+              </div>
+            </div>
+          </div>
           <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Plate number</div>
           <input class="ig-input" id="wizPlate" placeholder="e.g. LAG-234-KA" value="${(state.plate_number||'').replace(/"/g,'&quot;')}" style="text-transform:uppercase;letter-spacing:.05em;"/>
           <div style="font-size:.65rem;color:var(--gold);margin-top:.5rem;background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);border-radius:8px;padding:.55rem .7rem;">
@@ -2790,11 +2824,16 @@ function requireIdentity(purpose, opts){
         focus: null,
         onMount: (stepEl)=>{
           const bikeWrap = stepEl.querySelector('#wizBikeOwnWrap');
+          const detailsWrap = stepEl.querySelector('#wizVehDetailsWrap');
           stepEl.querySelectorAll('#wizVehType .jrn-chip').forEach(btn=>{
             btn.onclick = ()=>{
               stepEl.querySelectorAll('#wizVehType .jrn-chip').forEach(b=>b.classList.remove('selected'));
               btn.classList.add('selected');
               state.vehicle_type = btn.dataset.type;
+              // Show/hide vehicle details (make/model/year/color) for cars and motorcycles
+              if(detailsWrap){
+                detailsWrap.style.display = (isCar(state.vehicle_type)||state.vehicle_type==='Motorcycle') ? 'block' : 'none';
+              }
               // Toggle bike-ownership block; clear the value if leaving Motorcycle
               if(bikeWrap){
                 if(state.vehicle_type === 'Motorcycle'){
@@ -2819,6 +2858,18 @@ function requireIdentity(purpose, opts){
           if(!state.vehicle_type){ showToast('Pick a vehicle type'); return false; }
           if(state.vehicle_type === 'Motorcycle' && !state.bike_ownership){
             showToast('Tell us if the bike is yours or fleet'); return false;
+          }
+          // Capture make/model/year/color
+          state.vehicle_make  = (document.getElementById('wizVehMake')?.value  || '').trim();
+          state.vehicle_model = (document.getElementById('wizVehModel')?.value || '').trim();
+          state.vehicle_year  = (document.getElementById('wizVehYear')?.value  || '').trim();
+          state.vehicle_color = (document.getElementById('wizVehColor')?.value || '').trim();
+          // Require make + model for cars
+          if((isCar(state.vehicle_type)||state.vehicle_type==='Motorcycle') && !state.vehicle_make){
+            showToast('Enter the vehicle make (e.g. Toyota)'); return false;
+          }
+          if((isCar(state.vehicle_type)||state.vehicle_type==='Motorcycle') && !state.vehicle_model){
+            showToast('Enter the model (e.g. Camry)'); return false;
           }
           const plate = (document.getElementById('wizPlate')?.value || '').trim().toUpperCase();
           if(!plate){ showToast('Please enter your plate number'); return false; }
@@ -3030,7 +3081,8 @@ function requireIdentity(purpose, opts){
           <div class="wiz-summary-row"><span class="wiz-summary-label">Phone</span><span class="wiz-summary-val">${ccDisplay}</span></div>
           <div class="wiz-summary-row"><span class="wiz-summary-label">Role</span><span class="wiz-summary-val">${ROLES[state.role]?.emoji||''} ${ROLES[state.role]?.label||state.role}</span></div>
           ${state.role === 'owner' && state.vehicle_type ? `
-            <div class="wiz-summary-row"><span class="wiz-summary-label">Vehicle</span><span class="wiz-summary-val">${state.vehicle_type}</span></div>
+            <div class="wiz-summary-row"><span class="wiz-summary-label">Vehicle</span><span class="wiz-summary-val">${[state.vehicle_make,state.vehicle_model,state.vehicle_year].filter(Boolean).join(' ')||state.vehicle_type}${state.vehicle_color?' · '+state.vehicle_color:''}</span></div>
+            <div class="wiz-summary-row"><span class="wiz-summary-label">Type</span><span class="wiz-summary-val">${state.vehicle_type}</span></div>
             <div class="wiz-summary-row"><span class="wiz-summary-label">Plate</span><span class="wiz-summary-val">${state.plate_number||'—'}</span></div>
           `:''}
           ${state.role === 'skater' && state.skater_drives !== undefined ? `
@@ -3288,6 +3340,17 @@ function requireIdentity(purpose, opts){
 
       identity.fuSeq = FU.getOrAssignSeq(identity.email);
       identity.roles = FU.rolesFor(identity.email);
+
+      // v11.11.1 — Owner vehicle fields flow onto identity so PairingStore,
+      // trip records, and rider-facing cards all show the real vehicle.
+      if(state.role === 'owner'){
+        identity.vehicle_type  = state.vehicle_type  || '';
+        identity.vehicle_make  = state.vehicle_make  || '';
+        identity.vehicle_model = state.vehicle_model || '';
+        identity.vehicle_year  = state.vehicle_year  || '';
+        identity.vehicle_color = state.vehicle_color || '';
+        identity.plate_number  = state.plate_number  || '';
+      }
       IdentityStore.save(identity);
 
       // ═══ v10.7 hotfix 8 — ONBOARDING CAPTURE + PERK ALLOCATION ═══
@@ -3296,6 +3359,10 @@ function requireIdentity(purpose, opts){
         Onboarding.saveOwner({
           name: identity.name, email: identity.email, phone: identity.phone,
           vehicleType: state.vehicle_type || 'Sedan / Saloon',
+          vehicleMake: state.vehicle_make || '',
+          vehicleModel: state.vehicle_model || '',
+          vehicleYear: state.vehicle_year || '',
+          vehicleColor: state.vehicle_color || '',
           plate: state.plate_number || '',
           bike_ownership: state.vehicle_type === 'Motorcycle' ? (state.bike_ownership || 'self') : '',
           fuSeq: identity.fuSeq,
@@ -5577,6 +5644,19 @@ const LAGOS_ZONES = [
 ];
 
 // ── PAIRING STORE ─────────────────────────────────────────────────────────
+// v11.11.1 — Build a human-readable vehicle label from identity or data object.
+// "Toyota Camry 2020 · Silver" instead of "Sedan / Saloon".
+function vehicleLabel(d){
+  if(!d) return '';
+  const make  = d.vehicle_make  || d.vehicleMake  || '';
+  const model = d.vehicle_model || d.vehicleModel || '';
+  const year  = d.vehicle_year  || d.vehicleYear  || '';
+  const color = d.vehicle_color || d.vehicleColor || '';
+  const parts = [make, model, year].filter(Boolean);
+  if(parts.length) return parts.join(' ') + (color ? ' · ' + color : '');
+  return d.vehicle_type || d.vehicle || '';
+}
+
 // v11.9.0 — Single source of truth for who is approved to drive which vehicle.
 // The owner's approval IS the trust event. A trip inherits the active pairing;
 // the rider card and owner monitor both READ from this — neither fabricates
@@ -5927,7 +6007,7 @@ function ownerAcceptRequest(id){
   const me = IdentityStore.current() || {};
   // Accepting a request creates the real owner-approved pairing.
   PairingStore.approve({
-    vehicle: r.vehicle || me.vehicle_type || '',
+    vehicle: r.vehicle || vehicleLabel(me) || me.vehicle_type || '',
     plate:   r.plate   || me.plate || me.plate_number || '',
     owner:  { name: r.owner_name || me.name, fu_number: r.owner_fu || me.fu_number },
     driver: { name: r.driver_name, fu_number: r.driver_fu },
@@ -6403,7 +6483,7 @@ function _renderPairingCard(me, vehicle, plate, active){
   <div class="card" style="border-color:var(--gold);">
     <div style="display:flex;align-items:center;gap:.55rem;margin-bottom:.5rem;">
       <span style="font-size:1.25rem;">🔑</span>
-      <div class="card-title" style="margin-bottom:0;color:var(--gold);">Who drives ${hasVehicle?`<strong>${vLabel}</strong>`:'your vehicle'}?</div>
+      <div class="card-title" style="margin-bottom:0;color:var(--gold);">Who drives ${hasVehicle?`<strong>${vehicleLabel(me)||vLabel}</strong>`:'your vehicle'}?</div>
     </div>
     <div style="font-size:.72rem;color:var(--muted);line-height:1.6;margin-bottom:.85rem;">
       You decide who is trusted to drive. Your approval is what every rider sees.
@@ -6446,7 +6526,7 @@ function pairSelf(){
   const me = IdentityStore.current() || {};
   if(!me.name){ showToast('Register first to pair a vehicle'); return; }
   const pairing = PairingStore.approve({
-    vehicle: me.vehicle_type || '',
+    vehicle: vehicleLabel(me) || me.vehicle_type || '',
     plate:   me.plate || me.plate_number || '',
     owner:  { name: me.name, fu_number: me.fu_number },
     driver: { name: me.name, fu_number: me.fu_number },
@@ -6461,7 +6541,7 @@ function pairKnownDriver(){
   const name = prompt("Driver's full name (someone you trust to drive your vehicle):");
   if(!name || !name.trim()) return;
   const pairing = PairingStore.approve({
-    vehicle: me.vehicle_type || '',
+    vehicle: vehicleLabel(me) || me.vehicle_type || '',
     plate:   me.plate || me.plate_number || '',
     owner:  { name: me.name, fu_number: me.fu_number },
     driver: { name: name.trim(), fu_number: null },
@@ -6507,7 +6587,7 @@ function renderOwnerDispatch(){
 
   // v11.9.0 — Real owner identity + vehicle for the pairing flow.
   const _me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
-  const _ownerVehicle = _me.vehicle_type || '';
+  const _ownerVehicle = vehicleLabel(_me) || _me.vehicle_type || '';
   const _ownerPlate    = _me.plate || _me.plate_number || '';
   const _activePairing = (typeof PairingStore!=='undefined')
       ? PairingStore.activeFor(_me.fu_number, _ownerPlate) : null;
