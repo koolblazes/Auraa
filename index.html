@@ -4746,26 +4746,25 @@ function bookTrip(fare){
 }
 
 function _doBookTrip(fare, rider){
-  // v11.4.1 — Honest payment flow.
-  //   IF wallet >= fare → debit wallet, log 'wallet' tx
-  //   IF wallet <  fare → open Flutterwave checkout, server-verify, then proceed
-  // No silent simulation. The button label "Confirm Trip" reflects this honestly.
+  // v11.11.2 — Live mode: ALWAYS go through Flutterwave so every trip has a
+  // verifiable payment record. The demo wallet is for test/demo mode only.
+  // This separation is what makes proof trips auditable.
 
-  if(S.riderWallet >= fare){
-    // ─── WALLET PATH ────────────────────────────────────────────
+  if(!FlutterwaveConfig.isLive() && S.riderWallet >= fare){
+    // ─── DEMO/TEST WALLET PATH (only in test mode) ──────────────
     S.riderWallet -= fare;
     localStorage.setItem('auraa_rider_wallet', S.riderWallet);
     _startTripFlow(fare, rider, 'wallet', null);
     return;
   }
 
-  // ─── INSUFFICIENT WALLET → REAL FLUTTERWAVE CHECKOUT ────────
+  // ─── REAL FLUTTERWAVE CHECKOUT ─────────────────────────────────
   if(typeof FlutterwaveCheckout === 'undefined'){
     showToast('Payment SDK not loaded — refresh and retry');
     return;
   }
   if(FlutterwaveConfig.isLive()){
-    if(!confirm(`Wallet balance ₦${S.riderWallet.toLocaleString()} is below trip fare ₦${fare.toLocaleString()}.\n\nProceed with LIVE card payment for the full trip fare?`)) return;
+    if(!confirm(`Trip fare: ₦${fare.toLocaleString()}.\n\nThis is a LIVE payment — your card will be charged. Proceed?`)) return;
   }
 
   const tx_ref = 'AURAA-TRIP-' + Date.now() + '-' + Math.random().toString(36).slice(2,8).toUpperCase();
