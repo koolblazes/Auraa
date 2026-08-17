@@ -1726,38 +1726,35 @@ const SupabaseSync = (function(){
     }
 
     try {
-      const { data, error } = await client.from(TABLE).insert(row).select();
+      // v11.11.2 — INSERT without .select() (SELECT policy removed for privacy).
+      // fu_number reconciliation uses safe RPC function instead of RETURNING.
+      const { error } = await client.from(TABLE).insert(row);
       if(error){
         if(_isEmailConflict(error, row.email)){
           // Email genuinely already in DB → treat as success.
-          // Try to read back the existing row's fu_number for reconciliation.
+          // Read back fu_number via safe RPC (doesn't expose other fields).
           try {
-            const { data: existing } = await client.from(TABLE)
-              .select('fu_number').eq('email', row.email).maybeSingle();
-            if(existing && existing.fu_number){
-              _reconcileFuNumber(row.email, existing.fu_number);
-            }
+            const { data: fuNum } = await client.rpc('get_fu_number', { p_email: row.email });
+            if(fuNum) _reconcileFuNumber(row.email, fuNum);
           } catch(_){ /* best-effort */ }
           _setStatus('duplicate-email', row.email+' already in DB');
           return { ok:true, duplicate:true };
         }
-        // Any other error — including 23505 on a non-email column,
-        // network failures, RLS rejections — must NOT be silently swallowed.
-        // Verbose logging so future failures surface immediately.
         const detail = error.code+': '+(error.message||'')+(error.details?' ['+error.details+']':'');
         console.error('[SupabaseSync] write failed —', detail, error);
         _enqueue(row, 'error: '+detail);
         _setStatus('queued-error', detail);
         return { ok:false, queued:true, error };
       }
-      // Success path — pull server-assigned fu_number back into local state
-      const inserted = (data && data[0]) || null;
-      if(inserted && inserted.fu_number){
-        _reconcileFuNumber(row.email, inserted.fu_number);
-      }
-      _setStatus('ok', 'FU#'+(inserted&&inserted.fu_number||'?')+' written for '+row.email);
+      // Success — get fu_number via safe RPC
+      let fu_number = null;
+      try {
+        const { data: fuNum } = await client.rpc('get_fu_number', { p_email: row.email });
+        if(fuNum){ fu_number = fuNum; _reconcileFuNumber(row.email, fuNum); }
+      } catch(_){ /* best-effort */ }
+      _setStatus('ok', 'FU#'+(fu_number||'?')+' written for '+row.email);
       _hydrateSplashCounter();
-      return { ok:true, data, fu_number: inserted ? inserted.fu_number : null };
+      return { ok:true, fu_number };
     } catch(e){
       console.error('[SupabaseSync] write exception:', e);
       _enqueue(row, 'exception: '+(e.message||'unknown'));
@@ -1770,13 +1767,13 @@ const SupabaseSync = (function(){
     const client = _initClient();
     if(!client) return null;
     try {
-      const { count, error } = await client.from(TABLE)
-        .select('*', { count:'exact', head:true });
+      // v11.11.2 — Use server-side count function (SELECT policy removed from founding_users)
+      const { data, error } = await client.rpc('count_founding_users');
       if(error){
         console.warn('[SupabaseSync] count error:', error);
         return null;
       }
-      return count;
+      return data;
     } catch(e){
       console.warn('[SupabaseSync] count exception:', e);
       return null;
@@ -1817,16 +1814,12 @@ const SupabaseSync = (function(){
         const cleanRecord = Object.assign({}, item.record);
         delete cleanRecord.fu_number;
 
-        const { data, error } = await client.from(TABLE).insert(cleanRecord).select();
+        const { error } = await client.from(TABLE).insert(cleanRecord);
         if(error){
           if(_isEmailConflict(error, cleanRecord.email)){
-            // Already in DB — count as success and reconcile FU#
             try {
-              const { data: existing } = await client.from(TABLE)
-                .select('fu_number').eq('email', cleanRecord.email).maybeSingle();
-              if(existing && existing.fu_number){
-                _reconcileFuNumber(cleanRecord.email, existing.fu_number);
-              }
+              const { data: fuNum } = await client.rpc('get_fu_number', { p_email: cleanRecord.email });
+              if(fuNum) _reconcileFuNumber(cleanRecord.email, fuNum);
             } catch(_){ /* best-effort */ }
             ok++;
           } else {
@@ -1836,10 +1829,10 @@ const SupabaseSync = (function(){
             failed++;
           }
         } else {
-          const inserted = (data && data[0]) || null;
-          if(inserted && inserted.fu_number){
-            _reconcileFuNumber(cleanRecord.email, inserted.fu_number);
-          }
+          try {
+            const { data: fuNum } = await client.rpc('get_fu_number', { p_email: cleanRecord.email });
+            if(fuNum) _reconcileFuNumber(cleanRecord.email, fuNum);
+          } catch(_){ /* best-effort */ }
           ok++;
         }
       } catch(e){
@@ -1986,10 +1979,11 @@ const SupabaseSync = (function(){
         pledge_on: false, pledge_pct: null, referrer: 'console',
       };
       console.log('[__AURAA_supabaseTest] inserting:', testRow);
-      const { data, error } = await c.from(TABLE).insert(testRow).select();
+      const { error } = await c.from(TABLE).insert(testRow);
       if(error){ console.error('[__AURAA_supabaseTest] error:', error); return error; }
-      console.log('[__AURAA_supabaseTest] ✅ success — server assigned FU#'+(data&&data[0]&&data[0].fu_number)+' — check Supabase dashboard:', data);
-      return data;
+      const { data: fuNum } = await c.rpc('get_fu_number', { p_email: testRow.email });
+      console.log('[__AURAA_supabaseTest] ✅ success — server assigned FU#'+fuNum+' — check Supabase dashboard');
+      return { fu_number: fuNum };
     };
 
     window.__AURAA_supabaseCount = async function(){
@@ -2762,11 +2756,59 @@ function requireIdentity(purpose, opts){
       };
     }
 
-    // v11.11.1 — Owner vehicle: type + make/model/year/color + plate
+    // v11.11.2 — Owner vehicle: photo + auto-suggest make→model + type-aware placeholders
     function stepOwnerVehicle(){
       const types = ['Sedan / Saloon', 'SUV', 'Motorcycle', 'Bicycle'];
       const isCar = (t)=> t==='Sedan / Saloon' || t==='SUV';
-      // v11 — Motorcycle owners split into two tracks: self-owned vs fleet-operated
+      const isBike = (t)=> t==='Motorcycle';
+
+      // ── Vehicle catalogs for auto-suggest ──
+      const CAR_MAKES = {
+        'Toyota':['Camry','Corolla','RAV4','Highlander','Land Cruiser','Hilux','Avalon','Venza','Sienna','4Runner','Yaris','Matrix','Prius'],
+        'Honda':['Accord','Civic','CR-V','Pilot','HR-V','Fit','Crosstour'],
+        'Hyundai':['Elantra','Tucson','Santa Fe','Sonata','Accent','Creta','ix35','i10'],
+        'Kia':['Sportage','Seltos','Rio','Cerato','Sorento','Optima','Picanto'],
+        'Mercedes-Benz':['C-Class','E-Class','S-Class','GLE','GLC','GLK','CLA'],
+        'BMW':['3 Series','5 Series','X3','X5','X6','7 Series'],
+        'Lexus':['RX','ES','GX','IS','LX','NX'],
+        'Nissan':['Pathfinder','Murano','Altima','Sentra','Qashqai','X-Trail'],
+        'Volkswagen':['Jetta','Passat','Golf','Tiguan','Touareg'],
+        'Ford':['Explorer','Escape','Edge','Focus','EcoSport','Ranger'],
+        'Peugeot':['206','207','301','308','406','407','508','3008'],
+        'Mitsubishi':['Pajero','Outlander','L200','Lancer'],
+        'Mazda':['CX-5','Mazda3','Mazda6','CX-3'],
+        'Suzuki':['Swift','Vitara','Jimny','SX4'],
+        'Isuzu':['D-Max','mu-X'],
+        'Innoson':['IVM Fox','IVM Carrier','IVM Granite'],
+      };
+      const BIKE_MAKES = {
+        'Bajaj':['Boxer','Pulsar','Platina','CT 100','Discover'],
+        'Honda':['Ace','CB','CG 125','Win','TMX'],
+        'TVS':['Apache','Star City','Sport','Raider'],
+        'Yamaha':['YBR 125','FZ','Crux','AG 100'],
+        'Suzuki':['GN 125','Gixxer','Hayate','EN 125'],
+        'Haojue':['HJ 150','Lucky','Cool'],
+        'Qlink':['Ranger','Adventure','XF 200'],
+        'Jincheng':['JC 110','AX 100'],
+      };
+      function _getCatalog(){ return isBike(state.vehicle_type) ? BIKE_MAKES : CAR_MAKES; }
+      function _makeDatalist(){
+        return Object.keys(_getCatalog()).map(m=>`<option value="${m}">`).join('');
+      }
+      function _modelDatalist(make){
+        const cat = _getCatalog();
+        const models = cat[make] || [];
+        return models.map(m=>`<option value="${m}">`).join('');
+      }
+      function _placeholders(){
+        return isBike(state.vehicle_type)
+          ? { make:'e.g. Bajaj', model:'e.g. Boxer', year:'e.g. 2023', color:'e.g. Black' }
+          : { make:'e.g. Toyota', model:'e.g. Camry', year:'e.g. 2020', color:'e.g. Silver' };
+      }
+
+      // Existing photo (if any)
+      const existingPhoto = typeof FU!=='undefined' ? FU.getPhoto(state.email||'','vehicle') : null;
+
       const bikeOwnershipBlock = `
         <div id="wizBikeOwnWrap" style="display:${state.vehicle_type==='Motorcycle'?'block':'none'};margin-bottom:.9rem;">
           <div style="font-size:.7rem;color:var(--muted);margin-bottom:.4rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Do you own this motorcycle?</div>
@@ -2781,37 +2823,48 @@ function requireIdentity(purpose, opts){
             </button>
           </div>
         </div>`;
+      const ph = _placeholders();
       return {
         title: 'Tell us about your vehicle.',
         hint: 'Riders see this when they book — accurate details build trust. You can update later.',
         body: `
+          <div style="font-size:.7rem;color:var(--muted);margin-bottom:.4rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Vehicle photo</div>
+          <div id="wizPhotoArea" class="photo-upload-area${existingPhoto?' has-photo':''}" onclick="document.getElementById('wizPhotoInput').click()" style="margin-bottom:.9rem;">
+            ${existingPhoto
+              ? '<img src="'+existingPhoto+'" class="photo-thumb" alt="Vehicle"/>'
+              : '<div class="photo-placeholder-icon">📸</div><div class="photo-placeholder-text">Tap to upload a photo of your vehicle</div><div class="photo-placeholder-hint">JPG / PNG — helps riders recognise your car at pickup</div>'}
+          </div>
+          <input type="file" id="wizPhotoInput" accept="image/*" style="display:none;"/>
+
           <div style="font-size:.7rem;color:var(--muted);margin-bottom:.4rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Vehicle type</div>
           <div class="jrn-chip-grid" id="wizVehType" style="margin-bottom:.9rem;">
-            ${types.map((t,i)=>`
+            ${types.map((t)=>`
               <button class="jrn-chip${state.vehicle_type===t?' selected':''}" data-type="${t}" type="button">
                 <div class="jrn-chip-primary">${t==='SUV'?'🚙':t==='Motorcycle'?'🏍️':t==='Bicycle'?'🚲':'🚗'} ${t}</div>
               </button>`).join('')}
           </div>
           ${bikeOwnershipBlock}
-          <div id="wizVehDetailsWrap" style="display:${isCar(state.vehicle_type)||state.vehicle_type==='Motorcycle'?'block':'none'};">
+          <div id="wizVehDetailsWrap" style="display:${isCar(state.vehicle_type)||isBike(state.vehicle_type)?'block':'none'};">
+            <datalist id="wizMakeList">${_makeDatalist()}</datalist>
+            <datalist id="wizModelList">${_modelDatalist(state.vehicle_make)}</datalist>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem;margin-bottom:.55rem;">
               <div>
                 <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Make</div>
-                <input class="ig-input" id="wizVehMake" placeholder="e.g. Toyota" value="${(state.vehicle_make||'').replace(/"/g,'&quot;')}"/>
+                <input class="ig-input" id="wizVehMake" list="wizMakeList" placeholder="${ph.make}" value="${(state.vehicle_make||'').replace(/"/g,'&quot;')}" autocomplete="off"/>
               </div>
               <div>
                 <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Model</div>
-                <input class="ig-input" id="wizVehModel" placeholder="e.g. Camry" value="${(state.vehicle_model||'').replace(/"/g,'&quot;')}"/>
+                <input class="ig-input" id="wizVehModel" list="wizModelList" placeholder="${ph.model}" value="${(state.vehicle_model||'').replace(/"/g,'&quot;')}" autocomplete="off"/>
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem;margin-bottom:.55rem;">
               <div>
                 <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Year</div>
-                <input class="ig-input" id="wizVehYear" placeholder="e.g. 2020" value="${(state.vehicle_year||'').replace(/"/g,'&quot;')}" type="number" min="1990" max="2027"/>
+                <input class="ig-input" id="wizVehYear" placeholder="${ph.year}" value="${(state.vehicle_year||'').replace(/"/g,'&quot;')}" type="number" min="1990" max="2027"/>
               </div>
               <div>
                 <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;">Color</div>
-                <input class="ig-input" id="wizVehColor" placeholder="e.g. Silver" value="${(state.vehicle_color||'').replace(/"/g,'&quot;')}"/>
+                <input class="ig-input" id="wizVehColor" placeholder="${ph.color}" value="${(state.vehicle_color||'').replace(/"/g,'&quot;')}"/>
               </div>
             </div>
           </div>
@@ -2825,16 +2878,60 @@ function requireIdentity(purpose, opts){
         onMount: (stepEl)=>{
           const bikeWrap = stepEl.querySelector('#wizBikeOwnWrap');
           const detailsWrap = stepEl.querySelector('#wizVehDetailsWrap');
+          const makeInput = stepEl.querySelector('#wizVehMake');
+          const modelInput = stepEl.querySelector('#wizVehModel');
+          const makeList = stepEl.querySelector('#wizMakeList');
+          const modelList = stepEl.querySelector('#wizModelList');
+
+          // ── Photo upload handler ──
+          stepEl.querySelector('#wizPhotoInput').addEventListener('change', (e)=>{
+            const f = e.target.files[0]; if(!f) return;
+            const reader = new FileReader();
+            reader.onload = (ev)=>{
+              if(state.email && typeof FU!=='undefined') FU.savePhoto(state.email, 'vehicle', ev.target.result);
+              state._vehiclePhoto = ev.target.result;
+              const area = stepEl.querySelector('#wizPhotoArea');
+              if(area){ area.classList.add('has-photo'); area.innerHTML = '<img src="'+ev.target.result+'" class="photo-thumb" alt="Vehicle"/>'; }
+              showToast('✓ Photo uploaded');
+            };
+            reader.readAsDataURL(f);
+          });
+
+          // ── Make auto-suggest → populate model list ──
+          if(makeInput){
+            makeInput.addEventListener('input', ()=>{
+              const val = makeInput.value.trim();
+              const cat = _getCatalog();
+              // Find exact or closest match
+              const match = Object.keys(cat).find(k=> k.toLowerCase()===val.toLowerCase());
+              if(match && modelList){
+                modelList.innerHTML = cat[match].map(m=>'<option value="'+m+'">').join('');
+              }
+            });
+          }
+
+          // ── Vehicle type switching ──
           stepEl.querySelectorAll('#wizVehType .jrn-chip').forEach(btn=>{
             btn.onclick = ()=>{
               stepEl.querySelectorAll('#wizVehType .jrn-chip').forEach(b=>b.classList.remove('selected'));
               btn.classList.add('selected');
               state.vehicle_type = btn.dataset.type;
-              // Show/hide vehicle details (make/model/year/color) for cars and motorcycles
+              // Show/hide vehicle details for cars and motorcycles
               if(detailsWrap){
-                detailsWrap.style.display = (isCar(state.vehicle_type)||state.vehicle_type==='Motorcycle') ? 'block' : 'none';
+                detailsWrap.style.display = (isCar(state.vehicle_type)||isBike(state.vehicle_type)) ? 'block' : 'none';
               }
-              // Toggle bike-ownership block; clear the value if leaving Motorcycle
+              // Rebuild make datalist for the new type
+              if(makeList) makeList.innerHTML = _makeDatalist();
+              if(modelList) modelList.innerHTML = '';
+              // Update placeholders
+              const p = _placeholders();
+              if(makeInput){ makeInput.placeholder = p.make; makeInput.value = ''; }
+              if(modelInput){ modelInput.placeholder = p.model; modelInput.value = ''; }
+              const yearInput = stepEl.querySelector('#wizVehYear');
+              const colorInput = stepEl.querySelector('#wizVehColor');
+              if(yearInput) yearInput.placeholder = p.year;
+              if(colorInput) colorInput.placeholder = p.color;
+              // Toggle bike-ownership block
               if(bikeWrap){
                 if(state.vehicle_type === 'Motorcycle'){
                   bikeWrap.style.display = 'block';
@@ -2864,12 +2961,12 @@ function requireIdentity(purpose, opts){
           state.vehicle_model = (document.getElementById('wizVehModel')?.value || '').trim();
           state.vehicle_year  = (document.getElementById('wizVehYear')?.value  || '').trim();
           state.vehicle_color = (document.getElementById('wizVehColor')?.value || '').trim();
-          // Require make + model for cars
-          if((isCar(state.vehicle_type)||state.vehicle_type==='Motorcycle') && !state.vehicle_make){
-            showToast('Enter the vehicle make (e.g. Toyota)'); return false;
+          // Require make + model for cars and motorcycles
+          if((isCar(state.vehicle_type)||isBike(state.vehicle_type)) && !state.vehicle_make){
+            showToast('Enter the vehicle make'); return false;
           }
-          if((isCar(state.vehicle_type)||state.vehicle_type==='Motorcycle') && !state.vehicle_model){
-            showToast('Enter the model (e.g. Camry)'); return false;
+          if((isCar(state.vehicle_type)||isBike(state.vehicle_type)) && !state.vehicle_model){
+            showToast('Enter the model'); return false;
           }
           const plate = (document.getElementById('wizPlate')?.value || '').trim().toUpperCase();
           if(!plate){ showToast('Please enter your plate number'); return false; }
@@ -3764,13 +3861,18 @@ function closeAdminGate(){
 }
 function verifyAdminCode(){
   const code=document.getElementById('adminCodeInput').value.trim();
-  if(code==='UZOMA-AURAA-001'){
-    closeAdminGate();
-    selectRole('admin');
-  } else {
-    showToast('Invalid access code');
-    document.getElementById('adminCodeInput').value='';
-  }
+  // v11.11.2 — Admin code no longer in source. SHA-256 hash comparison only.
+  const _h='62c67e2b77a59ca300ed780cc6856887ff4c78ade70a3cf4667cd63c20ac9018';
+  crypto.subtle.digest('SHA-256', new TextEncoder().encode(code)).then(buf=>{
+    const hash=Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    if(hash===_h){
+      closeAdminGate();
+      selectRole('admin');
+    } else {
+      showToast('Invalid access code');
+      document.getElementById('adminCodeInput').value='';
+    }
+  });
 }
 
 function hideSplash(){
