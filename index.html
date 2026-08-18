@@ -5328,43 +5328,44 @@ function renderDriverTrips(){
   const showProof=liveTrip && (proofStatus==='active'||proofStatus==='searching') && proofStatus!=='completed' && proofStatus!=='accepted';
 
   // v11.5.0 — Also fetch from Supabase for cross-device trips
-  TripSync.fetchPendingTrips().then(supabaseTrips => {
-    supabaseTrips.forEach(t => {
-      const existing = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
-      const existingUUID = existing?._supabase_uuid;
-      if(!existingUUID || existingUUID !== t.id){
-        const crossDeviceTrip = {
-          id:             'PROOF-' + t.id,
-          // v11.9.2 — Read the real service from the DB. Hardcoded 'GO' meant a
-          // BICYCLE/SKATE/BIKE trip accepted cross-device settled at GO 55/25/20.
-          svc:            t.service || 'GO',
-          from:           t.origin,
-          to:             t.destination,
-          fare:           parseFloat(t.price) || 3500,
-          status:         'searching',
-          riderName:      t.rider_id || 'Rider',
-          riderEmail:     t.rider_id || '',
-          time:           new Date(t.created_at).toLocaleString(),
-          // v11.9.2 — Owner attribution now persists, so carry it across devices.
-          ownerAuth:      !!t.owner_name,
-          owner:          t.owner_name || null,
-          vehicle:        t.vehicle || null,
-          plate:          t.plate || null,
-          // v11.9.1 — Carry the driver assigned at booking. Without this the
-          // accepting phone's acceptProofTrip fell back to its own identity,
-          // overwriting the owner-approved pairing. Trust level isn't stored
-          // in the DB yet, so no badge is claimed — name only. Honest fields only.
-          driver:         t.driver_name ? { name: t.driver_name, source: 'pairing', trust: null } : null,
-          paymentSource:  'wallet',
-          _from_supabase: true,
-          _supabase_uuid: t.id
-        };
-        localStorage.setItem('auraa_live_trip', JSON.stringify(crossDeviceTrip));
-        localStorage.setItem('auraa_proof_trip_status', 'searching');
-        renderDriverTrips();
-      }
-    });
-  });
+  // v11.11.2 — Guard against infinite render loop: fetch only on first call,
+  // not on recursive re-renders triggered by the fetch itself.
+  if(!renderDriverTrips._fetching){
+    renderDriverTrips._fetching = true;
+    TripSync.fetchPendingTrips().then(supabaseTrips => {
+      renderDriverTrips._fetching = false;
+      let needsRerender = false;
+      supabaseTrips.forEach(t => {
+        const existing = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
+        const existingUUID = existing?._supabase_uuid;
+        if(!existingUUID || existingUUID !== t.id){
+          const crossDeviceTrip = {
+            id:             'PROOF-' + t.id,
+            svc:            t.service || 'GO',
+            from:           t.origin,
+            to:             t.destination,
+            fare:           parseFloat(t.price) || 3500,
+            status:         'searching',
+            riderName:      t.rider_id || 'Rider',
+            riderEmail:     t.rider_id || '',
+            time:           new Date(t.created_at).toLocaleString(),
+            ownerAuth:      !!t.owner_name,
+            owner:          t.owner_name || null,
+            vehicle:        t.vehicle || null,
+            plate:          t.plate || null,
+            driver:         t.driver_name ? { name: t.driver_name, source: 'pairing', trust: null } : null,
+            paymentSource:  'wallet',
+            _from_supabase: true,
+            _supabase_uuid: t.id
+          };
+          localStorage.setItem('auraa_live_trip', JSON.stringify(crossDeviceTrip));
+          localStorage.setItem('auraa_proof_trip_status', 'searching');
+          needsRerender = true;
+        }
+      });
+      if(needsRerender) renderDriverTrips();
+    }).catch(()=>{ renderDriverTrips._fetching = false; });
+  }
 
   // ── FILTER JOBS BY DRIVER TYPE ────────────────────────────────────
   // Default to Emeka (assist + car) so Owner's Assist requests show up in the driver dashboard.
