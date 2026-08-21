@@ -1358,11 +1358,15 @@ const TripSync = (function(){
   async function fetchPendingTrips(){
     const c = _getClient();
     if(!c) return [];
+    // v11.11.3 — Only fetch trips from the last 30 minutes.
+    // Older 'searching' trips are stale (rider abandoned or connection lost).
+    const thirtyMinAgo = new Date(Date.now() - 30*60*1000).toISOString();
     const { data, error } = await c.from('trips')
       .select('*')
       .eq('status', 'searching')
+      .gte('created_at', thirtyMinAgo)
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(5);
     if(error){ console.error('[TripSync] fetch failed:', error); return []; }
     return data || [];
   }
@@ -4739,9 +4743,9 @@ function calcFare(){
       <span class="split-label" style="color:var(--gold);">Total</span>
       <span class="split-val" style="color:var(--gold);">₦${f.total.toLocaleString()}</span>
     </div>
-    <div style="font-size:.68rem;color:var(--muted);margin:.5rem 0 .75rem;text-align:center;">💳 Wallet pays first. If wallet is short, you'll be sent to Flutterwave for live card payment.</div>
+    <div style="font-size:.68rem;color:var(--muted);margin:.5rem 0 .75rem;text-align:center;">${FlutterwaveConfig.isLive() ? '💳 You will be charged via Flutterwave (live card payment).' : '💳 Wallet pays first. If wallet is short, you\'ll be sent to Flutterwave for live card payment.'}</div>
     <div style="margin-top:.5rem;">
-      <button class="btn btn-primary" onclick="bookTrip(${f.total})">${S.riderWallet >= f.total ? `Confirm & Ride · ₦${f.total.toLocaleString()}` : `Confirm & Pay · ₦${f.total.toLocaleString()} (Live Card)`}</button>
+      <button class="btn btn-primary" onclick="bookTrip(${f.total})">${FlutterwaveConfig.isLive() ? `Confirm & Pay · ₦${f.total.toLocaleString()}` : (S.riderWallet >= f.total ? `Confirm & Ride · ₦${f.total.toLocaleString()}` : `Confirm & Pay · ₦${f.total.toLocaleString()} (Live Card)`)}</button>
     </div>
   </div>`;
 }
@@ -5001,6 +5005,48 @@ function _startTripFlow(fare, rider, paymentSource, paymentMeta){
   LS.pickup=null; LS.dropoff=null;
   renderTripActive();
 
+  // v11.11.3 — In live Flutterwave mode, do NOT auto-advance.
+  // Trip stays in 'searching' until a real driver accepts on another device.
+  // Poll Supabase every 5s to detect when trip status changes to 'accepted'.
+  if(paymentSource === 'flutterwave'){
+    S._tripPollInterval = setInterval(()=>{
+      const pt = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
+      if(!pt) { clearInterval(S._tripPollInterval); return; }
+      const supaId = pt._supabase_id || pt._supabase_uuid;
+      if(!supaId) return;
+      const c = (typeof window.supabase !== 'undefined' && window.supabase.createClient)
+        ? window.supabase.createClient('https://yroffdxgkppmqngybboj.supabase.co','sb_publishable_OcRlo6xhsrvzSWCG5dGkoA_AYqt-fdh')
+        : null;
+      if(!c) return;
+      c.from('trips').select('status,driver_name').eq('id', supaId).maybeSingle().then(({data})=>{
+        if(data && data.status === 'accepted' && S.tripState === 'searching'){
+          S.tripState = 'active';
+          pt.status = 'active';
+          if(data.driver_name && !pt.driver){ pt.driver = { name: data.driver_name, source: 'accept' }; }
+          localStorage.setItem('auraa_live_trip', JSON.stringify(pt));
+          localStorage.setItem('auraa_proof_trip_status', 'active');
+          showToast('✅ Driver accepted your trip!');
+          renderTripActive();
+        } else if(data && data.status === 'completed'){
+          // Driver completed on their device — update rider's screen
+          clearInterval(S._tripPollInterval);
+          S.tripState = 'idle'; S.tripProgress = 0;
+          pt.status = 'completed';
+          pt.completedAt = new Date().toLocaleString();
+          const completed = JSON.parse(localStorage.getItem('auraa_completed_trips')||'[]');
+          completed.unshift(pt);
+          localStorage.setItem('auraa_completed_trips', JSON.stringify(completed.slice(0,100)));
+          localStorage.removeItem('auraa_live_trip');
+          localStorage.removeItem('auraa_proof_trip_status');
+          showToast('🏁 Trip completed by driver!');
+          renderTab(0);
+        }
+      }).catch(()=>{});
+    }, 5000);
+    return; // Do NOT fall through to demo auto-advance
+  }
+
+  // ── DEMO/WALLET MODE ONLY — auto-advance after 3 seconds ──
   setTimeout(()=>{
     if(S.tripState!=='searching') return;
     S.tripState='active';
@@ -5017,9 +5063,13 @@ function renderTripActive(){
     mc.innerHTML=`
     <div class="card status-card" style="background:var(--dark3);">
       <div class="status-icon">🔍</div>
-      <div class="status-title">Finding Your Driver</div>
-      <div class="status-sub">Matching with nearby verified drivers...</div>
+      <div class="status-title">Waiting for Your Driver</div>
+      <div class="status-sub">Your trip is live — a driver needs to accept it on their device. This may take a moment.</div>
       <div class="progress-bar-wrap"><div class="progress-bar" style="width:60%;animation:search 1.5s infinite alternate;"></div></div>
+      <div style="margin-top:1rem;font-size:.68rem;color:var(--muted);text-align:center;">Trip ID: ${(()=>{const t=JSON.parse(localStorage.getItem('auraa_live_trip')||'null');return t?t.id:'—';})()}</div>
+      <div style="margin-top:1rem;text-align:center;">
+        <button class="btn btn-outline btn-sm" onclick="cancelSearchingTrip()">✕ Cancel Trip</button>
+      </div>
     </div>`;
     return;
   }
@@ -5066,24 +5116,32 @@ function renderTripActive(){
     })()}
   </div>`;
   if(S.progressTimer) clearInterval(S.progressTimer);
-  S.progressTimer=setInterval(()=>{
-    prog=Math.min(prog+2,100);
-    S.tripProgress=prog;
-    const pb=document.getElementById('tripProg');
-    const em=document.getElementById('etaMin');
-    if(pb) pb.style.width=prog+'%';
-    if(em) em.textContent=Math.max(0,12-Math.floor(prog/10));
-    if(prog>=100){clearInterval(S.progressTimer);completeTrip();}
-  },600);
+  // v11.11.3 — In live mode, no auto-completing progress bar.
+  // The trip stays active until the DRIVER taps "Complete Trip" on their device,
+  // which updates Supabase. For now, the rider can also tap "Complete Trip" manually.
+  // In demo/wallet mode, keep the auto-progressing bar for demonstration purposes.
+  const _lt = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
+  const _isLive = _lt && _lt.paymentSource === 'flutterwave';
+  if(!_isLive){
+    S.progressTimer=setInterval(()=>{
+      prog=Math.min(prog+2,100);
+      S.tripProgress=prog;
+      const pb=document.getElementById('tripProg');
+      const em=document.getElementById('etaMin');
+      if(pb) pb.style.width=prog+'%';
+      if(em) em.textContent=Math.max(0,12-Math.floor(prog/10));
+      if(prog>=100){clearInterval(S.progressTimer);completeTrip();}
+    },600);
+  }
 }
 
 function completeTrip(){
   clearInterval(S.progressTimer);
+  if(S._tripPollInterval) clearInterval(S._tripPollInterval);
   const svcUp = (S.service||'go').toUpperCase();
   const insured = (svcUp === 'GO' || svcUp === 'ASSIST');
   S.tripState='idle'; S.tripProgress=0;
   Transition.beat(1200);
-  // Save to completed trips so admin and rider history update
   const liveTrip=JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
   if(liveTrip){
     liveTrip.status='completed';
@@ -5092,11 +5150,21 @@ function completeTrip(){
     const completed=JSON.parse(localStorage.getItem('auraa_completed_trips')||'[]');
     completed.unshift(liveTrip);
     localStorage.setItem('auraa_completed_trips',JSON.stringify(completed.slice(0,100)));
+
+    // v11.11.3 — Fire settlement (was missing — rider completion never settled)
+    const legs = settleTrip(liveTrip);
+
+    // v11.11.3 — Update Supabase (was missing — trip stayed as 'accepted' forever)
+    const _uuid = liveTrip._supabase_uuid || liveTrip._supabase_id || null;
+    TripSync.updateTrip(liveTrip.id, {
+      status: 'completed',
+      driver_name: liveTrip.driver?.name || null
+    }, _uuid);
   }
   localStorage.removeItem('auraa_live_trip');
   localStorage.removeItem('auraa_proof_trip_status');
   LS.pickup=null; LS.dropoff=null;
-  showToast(insured ? 'Trip completed! Insurance cover ended. Rate your driver.' : 'Trip completed! Rate your driver.');
+  showToast(insured ? 'Trip completed! Insurance cover ended.' : 'Trip completed!');
   renderTab(0);
 }
 
@@ -5334,8 +5402,11 @@ function renderDriverTrips(){
     renderDriverTrips._fetching = true;
     TripSync.fetchPendingTrips().then(supabaseTrips => {
       renderDriverTrips._fetching = false;
-      let needsRerender = false;
-      supabaseTrips.forEach(t => {
+      // v11.11.3 — Only process the FIRST (most recent) pending trip.
+      // Multiple stale trips caused forEach to overwrite localStorage
+      // repeatedly, creating an infinite render loop.
+      const t = supabaseTrips[0];
+      if(t){
         const existing = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
         const existingUUID = existing?._supabase_uuid;
         if(!existingUUID || existingUUID !== t.id){
@@ -5360,10 +5431,9 @@ function renderDriverTrips(){
           };
           localStorage.setItem('auraa_live_trip', JSON.stringify(crossDeviceTrip));
           localStorage.setItem('auraa_proof_trip_status', 'searching');
-          needsRerender = true;
+          renderDriverTrips();
         }
-      });
-      if(needsRerender) renderDriverTrips();
+      }
     }).catch(()=>{ renderDriverTrips._fetching = false; });
   }
 
@@ -5759,6 +5829,22 @@ function declineProofTrip(){
   localStorage.removeItem('auraa_proof_trip_status');
   showToast('Live trip declined');
   renderDriverTrips();
+}
+
+// v11.11.3 — Let the rider cancel while waiting for a driver
+function cancelSearchingTrip(){
+  if(!confirm('Cancel this trip? If you were charged, you\'ll need to contact support for a refund.')) return;
+  if(S._tripPollInterval) clearInterval(S._tripPollInterval);
+  const liveTrip = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
+  if(liveTrip){
+    const _uuid = liveTrip._supabase_uuid || liveTrip._supabase_id || null;
+    TripSync.updateTrip(liveTrip.id, { status: 'cancelled' }, _uuid);
+  }
+  localStorage.removeItem('auraa_live_trip');
+  localStorage.removeItem('auraa_proof_trip_status');
+  S.tripState = 'idle';
+  showToast('Trip cancelled');
+  renderTab(0);
 }
 
 function acceptTrip(id){
