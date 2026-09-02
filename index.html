@@ -8544,7 +8544,7 @@ function renderAdminDash(){
     </div>
   </div>
   <div class="stats-grid">
-    <div class="stat-box"><div class="stat-val">247</div><div class="stat-lbl">Standby Drivers</div></div>
+    <div class="stat-box"><div class="stat-val">37</div><div class="stat-lbl">Founding Users</div></div>
     <div class="stat-box"><div class="stat-val">${totalRevenue}</div><div class="stat-lbl">Platform Revenue</div></div>
     <div class="stat-box"><div class="stat-val">${totalTrips.toLocaleString()}</div><div class="stat-lbl">Total Trips</div></div>
     <div class="stat-box"><div class="stat-val">4.8⭐</div><div class="stat-lbl">Avg Rating</div></div>
@@ -9045,7 +9045,7 @@ function renderInvestorTab(){
   <div class="stats-grid">
     <div class="stat-box"><div class="stat-val">$200K</div><div class="stat-lbl">Pre-Seed SAFE</div></div>
     <div class="stat-box"><div class="stat-val">₦1.2-1.5B</div><div class="stat-lbl">Valuation Cap</div></div>
-    <div class="stat-box"><div class="stat-val">247</div><div class="stat-lbl">Verified Drivers</div></div>
+    <div class="stat-box"><div class="stat-val">37</div><div class="stat-lbl">Founding Users</div></div>
     <div class="stat-box"><div class="stat-val">Lagos 2026</div><div class="stat-lbl">Launch</div></div>
   </div>`;
 }
@@ -9060,133 +9060,78 @@ let hniSlotsLeft=2; // simulate urgency — 2 of 4 slots remaining
 const vcSlides=[
   // ── 1. COVER ──────────────────────────────────────────────
   {title:'AURAA',body:`<div style="text-align:center;padding:.5rem 0;">
-    <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.9rem;">Coordinated mobility infrastructure for emerging-market megacities.<br/>Launching Lagos 2026, architected for cross-border scale.</div>
-    <div style="font-size:1.6rem;font-weight:800;color:var(--text);line-height:1.3;margin-bottom:.5rem;">Be Safe.<br/>Be Unstoppable.</div>
+    <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.9rem;">Vehicle-First Urban Mobility Infrastructure for Africa.<br/>Launching Lagos. Architected for cross-border scale.</div>
+    <div style="font-size:1.4rem;font-weight:800;color:var(--text);line-height:1.3;margin-bottom:.5rem;">The driver earns the most.<br/>The owner earns passively.<br/>The rider sees everything.</div>
     <div style="font-size:.85rem;color:var(--gold);font-style:italic;margin-top:.5rem;">Relax, we've got this.</div>
-    <div style="margin-top:1.25rem;font-size:.72rem;color:var(--muted);">CAC Reg. No. 9058278 • Lagos, Nigeria • Pre-Seed Round 2026</div>
+    <div style="margin-top:1.25rem;font-size:.72rem;color:var(--muted);">RC 9058278 \u2022 Lagos, Nigeria \u2022 Pre-Seed Round \u2022 September 2026</div>
   </div>`},
 
   // ── 2. THE PROBLEM ─────────────────────────────────────────
-  {title:'The Problem',body:`<strong>People don't just need rides.</strong><br/>They need control over their movement.<br/><br/>• People get stranded with their own cars — fatigue, alcohol, illness<br/>• Vehicle owners don't trust drivers with their cars<br/>• Drivers want to earn but don't have access to vehicles<br/>• Ride-hailing platforms ignore the vehicle owner completely<br/><br/><strong style="color:var(--gold);">Mobility today ignores the most important asset — the vehicle.</strong>`},
+  {title:'The Problem',body:`<strong>Lagos has a mobility infrastructure gap, not a ride-hailing gap.</strong><br/><br/>\u2022 5M+ private vehicles sit idle 14+ hours a day<br/>\u2022 21M+ residents underserved by safe, affordable transport<br/>\u2022 Drivers earn too little \u2014 Uber just exited Nigeria (Sep 2, 2026) after 12 years because the economics don\u2019t work<br/>\u2022 Vehicle owners have zero visibility into what happens with their cars<br/>\u2022 No trust layer exists between owners, drivers, and riders<br/><br/><strong style="color:var(--gold);">Existing platforms move the rider. Nobody makes the vehicle itself productive.</strong>`},
 
   // ── 3. THE INSIGHT ─────────────────────────────────────────
   {title:'The Insight',body:`<div style="text-align:center;padding:.75rem 0;">
-    <div style="font-size:1.05rem;font-weight:700;color:var(--text);line-height:1.6;margin-bottom:1rem;">The real asset in mobility<br/>is not the rider.<br/><strong style="color:var(--gold);">It's the vehicle.</strong></div>
-    <div style="font-size:.8rem;color:var(--muted);line-height:1.8;">Who controls it,<br/>who drives it,<br/>and how it earns —<br/><strong style="color:var(--text);">that's where the real value sits.</strong></div>
+    <div style="font-size:1.05rem;font-weight:700;color:var(--text);line-height:1.6;margin-bottom:1rem;">We don\u2019t manage rides.<br/><strong style="color:var(--gold);">We manage assets.</strong></div>
+    <div style="font-size:.8rem;color:var(--muted);line-height:1.8;">Treat the vehicle as a managed,<br/>income-generating asset \u2014 not the ride.<br/><br/>Riders, drivers, and owners all win<br/>because the asset is properly managed.</div>
   </div>`},
 
-  // ── 4. THE SOLUTION ────────────────────────────────────────
-  {title:'The Solution — AURAA',body:`<strong>AURAA is a vehicle-first mobility platform.</strong><br/><br/>It connects:<br/>• Vehicle Owners<br/>• Drivers (with or without cars)<br/>• Riders<br/><br/>Into one controlled system.<br/><br/><strong>Three core services:</strong><br/>🚗 <strong>AURAA Go</strong> — vehicles earn through structured trips<br/>🛻 <strong>AURAA Assist</strong> — a vetted driver comes to you and drives your car<br/>🛼🏍 <strong>AURAA Dispatch</strong> — skaters and bikes handle last-mile movement<br/><br/><em style="color:var(--gold);">Go = movement. Assist = control. Fix-it = support.</em>`},
+  // ── 4. THREE-SIDED MARKETPLACE ─────────────────────────────
+  {title:'Three-Sided Marketplace',body:`<strong>Vehicle owners. Verified drivers. Riders. One trust layer.</strong><br/><br/><div style="background:rgba(201,168,76,.07);border-radius:10px;padding:.65rem;margin-bottom:.6rem;"><strong style="color:var(--gold);">VEHICLE OWNERS</strong><br/><span style="font-size:.78rem;color:var(--muted);">Earn passive income from idle vehicles. Monitor trips and earnings.</span></div><div style="background:rgba(201,168,76,.07);border-radius:10px;padding:.65rem;margin-bottom:.6rem;"><strong style="color:var(--gold);">DRIVERS</strong><br/><span style="font-size:.78rem;color:var(--muted);">Earn 55% of every fare without owning a car. Save-to-Own path toward vehicle ownership.</span></div><div style="background:rgba(201,168,76,.07);border-radius:10px;padding:.65rem;"><strong style="color:var(--gold);">RIDERS</strong><br/><span style="font-size:.78rem;color:var(--muted);">Safe, traceable transport. Transparent pricing \u2014 see exactly where your fare goes.</span></div>`},
 
-  // ── 5. HOW IT WORKS ────────────────────────────────────────
-  {title:'How It Works',body:`AURAA is built around one simple structure:<br/><br/><div style="background:rgba(201,168,76,.07);border-radius:10px;padding:.75rem;text-align:center;font-family:'Syne',sans-serif;font-size:.82rem;font-weight:700;letter-spacing:.04em;margin-bottom:.85rem;">
-    Owner → Vehicle → Driver → Trip → Earnings
-  </div>
-  1. Owners register and list their vehicles<br/>
-  2. Drivers operate them under AURAA's verified system<br/>
-  3. Trips are executed with live tracking<br/>
-  4. Revenue auto-splits across all stakeholders via Flutterwave<br/><br/>
-  <div style="background:rgba(201,168,76,.07);border-radius:10px;padding:.75rem;text-align:center;font-family:'Syne',sans-serif;font-size:.82rem;font-weight:700;letter-spacing:.04em;">
-    Owner → Assist Request → Driver → Control
+  // ── 5. FIVE SERVICES ──────────────────────────────────────
+  {title:'Five Services. One Platform.',body:`<strong>Each service targets a different urban mobility need:</strong><br/><br/>\ud83d\ude97 <strong>AURAA GO</strong> \u2014 Standard ride-hailing. Owner vehicles, vetted drivers.<br/>\ud83d\ude9b <strong>AURAA ASSIST</strong> \u2014 Vetted driver dispatched to operate the owner\u2019s own vehicle.<br/>\ud83c\udfcd\ufe0f <strong>AURAA BIKE</strong> \u2014 Motorbike dispatch and delivery via dispatcher network.<br/>\ud83d\udef9 <strong>AURAA SKATE</strong> \u2014 Skater-powered last-mile delivery corridors.<br/>\ud83d\udeb2 <strong>AURAA BICYCLE</strong> \u2014 Last-mile cyclist deliveries.<br/><br/><em style="color:var(--gold);">Multi-service architecture scales with city density tiers.</em>`},
+
+  // ── 6. HOW AURAA EARNS ─────────────────────────────────────
+  {title:'How AURAA Earns',body:`<strong>Every trip splits at locked ratios. Platform absorbs insurance and ops.</strong><br/><br/><div style="font-size:.78rem;line-height:2;"><div><strong>GO:</strong> Driver 55% \u2022 Owner 25% \u2022 Platform 20%</div><div><strong>ASSIST:</strong> Driver 50% \u2022 Owner 30% \u2022 Platform 20%</div><div><strong>BIKE:</strong> Biker 65% \u2022 Dispatcher 15% \u2022 Platform 20%</div><div><strong>SKATE:</strong> Skater 75% \u2022 Platform 25%</div><div><strong>BICYCLE:</strong> Cyclist 75% \u2022 Platform 25%</div></div><br/><em style="font-size:.75rem;color:var(--muted);">The driver earns the most because the driver does the work. The rider sees one clean price.</em>`},
+
+  // ── 7. AURAA ASSIST ────────────────────────────────────────
+  {title:'AURAA Assist \u2014 The Category Creator',body:`<strong>A vetted driver dispatched to operate your own car.</strong><br/><br/>\u2705 Owner keeps full control of their vehicle<br/>\u2705 No asset risk \u2014 driver is vetted and paired<br/>\u2705 Use cases: night out, medical trip, school run, airport run, elderly support<br/><br/><strong>This is not ride-hailing. This is controlled mobility.</strong><br/><br/>ASSIST is also the supply engine: every vehicle that enters through ASSIST becomes available for GO. One onboarding, two services.<br/><br/><em style="color:var(--gold);">No other platform offers this anywhere.</em>`},
+
+  // ── 8. SAVE-TO-OWN ─────────────────────────────────────────
+  {title:'Save-to-Own (STO)',body:`<strong>Every trip builds toward vehicle ownership.</strong><br/><br/>3% of each party\u2019s share auto-diverts into their STO account:<br/>\u2022 Driver\u2019s 3% from their 55%<br/>\u2022 Owner\u2019s 3% from their 25%<br/>\u2022 Rider\u2019s 3% funded by platform (AURAA\u2019s effective take: 17%)<br/><br/>STO balances held by regulated custody partner (Kuda re-engaged, Sep 2026). AURAA never holds deposits.<br/><br/>12-month lock, then cash-out or continue toward a vehicle purchase.<br/><br/><strong style="color:var(--gold);">The first rider who cashes out STO toward a car is AURAA\u2019s proof-of-promise moment.</strong>`},
+
+  // ── 9. TRUST INFRASTRUCTURE ────────────────────────────────
+  {title:'Trust Infrastructure',body:`<strong>What is live today, and what activates at launch.</strong><br/><br/><div style="background:rgba(10,92,54,.12);border-radius:10px;padding:.65rem;margin-bottom:.6rem;"><strong style="color:var(--gold);">LIVE & VERIFIED</strong><br/><span style="font-size:.78rem;">Multi-party payment settlement via Flutterwave Split Payments. Real money moved: \u20a62,935.50 on 21 Aug 2026. Transparent fare architecture \u2014 every rider sees the full split before paying.</span></div><div style="background:rgba(201,168,76,.07);border-radius:10px;padding:.65rem;"><strong style="color:var(--gold);">ACTIVATES AT LAUNCH</strong><br/><span style="font-size:.78rem;">Driver verification (background checks, identity, medical clearance) \u2022 Embedded per-trip insurance (Heirs Insurance, LOI signed) \u2022 Vehicle telematics and tracking \u2022 In-cab monitoring \u2022 STO ledger activation</span></div><br/><em style="font-size:.72rem;color:var(--muted);">These are designed into the architecture and switch on as the round closes partner and compliance steps.</em>`},
+
+  // ── 10. PARTNERS ───────────────────────────────────────────
+  {title:'Partner Engagements',body:`<strong>Infrastructure-grade partners \u2014 status as of September 2026.</strong><br/><br/><div style="margin-bottom:.6rem;"><strong style="color:var(--gold);">INSURANCE</strong> \u2014 Heirs Insurance Group<br/><span style="font-size:.78rem;color:var(--muted);">LOI signed. Per-trip premium model proposed. Commercial terms advance post-licensing.</span></div><div style="margin-bottom:.6rem;"><strong style="color:var(--gold);">PAYMENTS</strong> \u2014 Flutterwave<br/><span style="font-size:.78rem;color:var(--muted);">Split Payments live. Real payment cleared \u20a62,935.50 (21 Aug). Sole payment processor \u2014 confirmed after evaluating alternatives.</span></div><div><strong style="color:var(--gold);">STO CUSTODY</strong> \u2014 Kuda Microfinance Bank<br/><span style="font-size:.78rem;color:var(--muted);">Re-engaged Sep 2026. Tier 3 API access path cleared \u2014 document upload in progress.</span></div>`},
+
+  // ── 11. WHERE WE STAND ─────────────────────────────────────
+  {title:'Where We Stand',body:`<strong>Pre-revenue. Live MVP. Real money moved. Fully bootstrapped.</strong><br/><br/><div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.75rem;"><div style="background:var(--dark3);border-radius:8px;padding:.5rem;text-align:center;"><div style="font-size:1.2rem;font-weight:800;color:var(--gold);">37</div><div style="font-size:.6rem;color:var(--muted);">FOUNDING USERS</div></div><div style="background:var(--dark3);border-radius:8px;padding:.5rem;text-align:center;"><div style="font-size:1.2rem;font-weight:800;color:var(--gold);">\u20a62,935</div><div style="font-size:.6rem;color:var(--muted);">FIRST REAL PAYMENT</div></div><div style="background:var(--dark3);border-radius:8px;padding:.5rem;text-align:center;"><div style="font-size:1.2rem;font-weight:800;color:var(--gold);">5</div><div style="font-size:.6rem;color:var(--muted);">ROLE DASHBOARDS</div></div><div style="background:var(--dark3);border-radius:8px;padding:.5rem;text-align:center;"><div style="font-size:1.2rem;font-weight:800;color:var(--gold);">\u20a60</div><div style="font-size:.6rem;color:var(--muted);">EXTERNAL CAPITAL</div></div></div><span style="font-size:.75rem;color:var(--muted);">MVP live at app.auraahq.com \u2022 Flutterwave settlement verified \u2022 Founding Trip Challenge live \u2022 First organic driver lead via AI recommendation \u2022 SMEDAN registered Jul 2026 \u2022 CAC incorporated Dec 2025</span>`},
+
+  // ── 12. MARKET OPPORTUNITY ─────────────────────────────────
+  {title:'Market Opportunity',body:`<strong>Lagos alone is a $3B+ ride-hailing market \u2014 and AURAA addresses the layer beneath it.</strong><br/><br/>\u2022 <strong>TAM:</strong> Nigeria\u2019s ride-hailing and urban mobility \u2014 $3B+<br/>\u2022 <strong>SAM:</strong> Lagos commercial and private-vehicle mobility \u2014 21M residents, 5M+ vehicles<br/>\u2022 <strong>SOM:</strong> Year 1 target: 500 founding vehicles across 4 corridors<br/><br/><strong style="color:var(--gold);">Context:</strong> Uber exited Nigeria Sep 2, 2026. Swoop entered Lagos with $7.3M. Smart money is moving into Lagos logistics \u2014 and smart money is also leaving when the economics don\u2019t work. AURAA\u2019s transparent split model is designed to solve the economics problem that drove Uber out.`},
+
+  // ── 13. COMPETITIVE LANDSCAPE ──────────────────────────────
+  {title:'Competitive Landscape',body:`<strong>No platform in Nigeria is built around the vehicle owner.</strong><br/><br/><div style="font-size:.78rem;line-height:1.8;"><div><strong>Bolt / Uber:</strong> No owner earnings, no driver path to ownership, no transparent splits, no embedded insurance</div><div><strong>InDrive:</strong> Partial transparency, no owner layer</div><div><strong>Rida:</strong> No owner economics</div><div style="margin-top:.5rem;"><strong style="color:var(--gold);">AURAA:</strong> Owner earnings \u2713 \u2022 Driver path to ownership (STO) \u2713 \u2022 Transparent splits \u2713 \u2022 Embedded insurance \u2713 \u2022 Mechanic network \u2713</div></div><br/><em style="font-size:.72rem;color:var(--muted);">AURAA\u2019s moat is structural: the three-sided trust architecture, the owner economics, and Save-to-Own are embedded in the design, not bolted on.</em>`},
+
+  // ── 14. GO-TO-MARKET ───────────────────────────────────────
+  {title:'Go-to-Market',body:`<strong>Start with vehicle owners. Riders follow supply.</strong><br/><br/><strong>Phase 1 (Months 1\u20133):</strong> Activate 50 vehicle owners through ASSIST. Vet and pair founding drivers. Run commercial pilots.<br/><br/><strong>Phase 2 (Months 4\u20138):</strong> Expand to 200 vehicles. Launch GO from the ASSIST vehicle pool. Activate STO ledger. Rider acquisition follows supply density.<br/><br/><strong>Phase 3 (Months 9\u201312):</strong> Activate BIKE, SKATE, BICYCLE. Launch mechanic network. Target: 500 vehicles, measurable STO accumulation, Series A readiness.<br/><br/><em style="color:var(--gold);">School runs and daily commuters are the emotional entry points. Parents trust a platform that vets drivers and insures trips.</em>`},
+
+  // ── 15. THE PLATFORM ───────────────────────────────────────
+  {title:'The Platform',body:`<strong>Live at app.auraahq.com</strong><br/><br/>\u2705 5 role dashboards: Rider, Driver, Vehicle Owner, Admin, Investor<br/>\u2705 Full trip lifecycle: book \u2192 accept \u2192 complete \u2192 settle<br/>\u2705 Flutterwave Split Payments integrated and verified<br/>\u2705 Founding user registration with unique FU numbers<br/>\u2705 Owner vehicle pairing and driver approval<br/>\u2705 Transparent fare breakdown before every payment<br/><br/><strong>Stack:</strong> Netlify \u2022 Supabase (Postgres + RLS) \u2022 Flutterwave \u2022 Google Workspace<br/><br/><em style="font-size:.75rem;color:var(--muted);">This is not a mockup. Every screen is functional. Every payment is real.</em>`},
+
+  // ── 16. THE TEAM ───────────────────────────────────────────
+  {title:'The Founder',body:`<strong>Mayowa Olakunle Olawale-Great</strong><br/>Founder & CEO, AURAA Technologies Limited<br/><br/><em>"I didn\u2019t study this problem. I lived it."</em><br/><br/>20+ years in Lagos across talent management, events, and service delivery. Deep network across entertainment, hospitality, and SMEs.<br/><br/>\u2022 Koolblazes Modelling Agency (2006\u20132022) \u2014 brand campaigns with MTN, Airtel, Keystone Bank<br/>\u2022 Club M Entertainment (2016\u20132024) \u2014 Nigeria\u2019s first overnight cinema concept<br/>\u2022 AURAA (2025) \u2014 the system these years were building toward<br/><br/>Built the MVP solo. Secured the Heirs LOI. Processed the first real payment. All before raising a single naira.<br/><br/><strong>I execute first. Then I ask.</strong>`},
+
+  // ── 17. THE ASK ────────────────────────────────────────────
+  {title:'The Ask',body:`<div style="text-align:center;padding:.5rem 0;">
+    <div style="font-size:1.6rem;font-weight:800;color:var(--gold);margin-bottom:.5rem;">$200,000 USD</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:1rem;">YC Post-Money SAFE \u2022 $1.33M cap \u2022 20% discount \u2022 15% equity at cap</div>
+    <div style="font-size:.78rem;color:var(--text);line-height:1.8;">No board seat \u2022 No MFN \u2022 No pro-rata<br/>Founder retains full board control through Series A.</div>
+    <div style="margin-top:1rem;font-size:.75rem;color:var(--muted);">Engineering 30% \u2022 Operations & Supply 25% \u2022 Marketing 20%<br/>Working Capital 15% \u2022 Compliance & Legal 10%</div>
+    <div style="margin-top:1rem;font-size:.78rem;color:var(--gold);font-style:italic;">This round funds compliance. Compliance unlocks legal trips. Legal trips are the traction.</div>
   </div>`},
 
-  // ── 6. AURAA ASSIST ────────────────────────────────────────
-  {title:'AURAA Assist — The Global Exclusive',body:`<strong>This is where AURAA becomes different.</strong><br/><br/>AURAA Assist allows a vehicle owner to request a vetted driver to come and operate <em>their own car.</em><br/><br/>✅ No loss of control<br/>✅ No asset risk<br/>✅ Fully owner-authorized<br/>✅ Live tracking throughout<br/><br/>Use cases: Night out returns, medical trips, early morning flights, corporate errands, elderly support.<br/><br/><strong>This is not ride-hailing.<br/>This is controlled mobility.</strong><br/><br/><em style="color:var(--gold);">No other platform offers this globally.</em>`,metric:'Global Exclusive',metricLabel:'No comparable product exists anywhere in the world'},
-
-  // ── 7. BEYOND RIDES: FIX-IT ────────────────────────────────
-  {title:'Beyond Rides: The AURAA Support Layer',body:`Mobility doesn't end at movement. Vehicles break down. Drivers and owners need support in real time.<br/><br/><strong>AURAA Fix-it</strong> connects drivers and owners instantly to nearby vetted mechanics.<br/><br/>🔧 <strong>₦5,000/month mechanic listing fee</strong><br/>🔧 <strong>First month free</strong> — zero-friction launch<br/>🔧 <strong>0% job commission</strong> — AURAA stays out of the warranty &amp; liability chain<br/><br/>Mechanics pay for visibility, not per-job. Pure connection layer — we facilitate, they execute.<br/><br/><strong style="color:var(--gold);">Revenue model:</strong><br/>• 200 Lagos mechanics → <strong>₦12M/year ARR</strong><br/>• 1,000 mechanics nationwide → <strong>₦60M/year ARR</strong><br/><br/>Subscription revenue that adds a recurring line without adding operational complexity or legal exposure.<br/><br/><em style="color:var(--gold);">"AURAA doesn't just move vehicles — it supports them."</em>`},
-
-  // ── 8. WHY NOW ─────────────────────────────────────────────
-  {title:'Why Now?',body:`• Urban congestion across African cities is accelerating<br/>• Vehicle ownership is rising — more cars, less trust in how they're managed<br/>• Gig economy maturity means driver supply exists; structure is missing<br/>• Trust in shared mobility is declining<br/>• Millions of vehicles remain underutilised daily<br/>• Insurance underwriting interest, Flutterwave, and Airtel Nigeria partnerships confirm infrastructure is ready<br/><br/><strong style="color:var(--gold);">The system is broken. AURAA rebuilds it around control and trust.</strong><br/><br/>247 verified drivers. MVP live. Capital is the only missing piece.`},
-
-  // ── 9. PRODUCT / LIVE MVP ──────────────────────────────────
-  {title:'Product — Live MVP',body:`We have built a working MVP that demonstrates:<br/><br/>✅ Rider, Driver, Owner, and Admin flows<br/>✅ Full trip lifecycle — booking → acceptance → completion<br/>✅ Wallet and earnings system per role<br/>✅ Owner-activated ASSIST request with driver selection<br/>✅ Fix-it mechanic connection layer<br/>✅ NDA-gated investor deck with lead capture<br/>✅ Admin activity tracking dashboard<br/><br/><strong>Live demo:</strong><br/><a href="https://auraahq.netlify.app" style="color:var(--gold);word-break:break-all;">auraahq.netlify.app</a><br/><br/><em style="font-size:.75rem;color:var(--muted);">This is not a mockup. Every screen is functional.</em>`},
-
-  // ── 10. TRUST & SAFETY ─────────────────────────────────────
-  {title:'Trust &amp; Safety Layer',body:`<strong>Every trip is protected end-to-end.</strong><br/><br/>🔐 <strong>Driver Verification</strong><br/>CAC identity check + Airtel Nigeria M2M SIM biometric confirmation + community referral<br/><br/>🛡️ <strong>Trip-Based Insurance</strong><br/>Every Go and Assist trip is insured by our underwriting partner. Cover begins at trip start, ends at trip termination. Visible on every trip receipt. Partner name protected until signature.<br/><br/>📋 <strong>Trip Logging</strong><br/>Every trip timestamped, route-recorded, and stored for claims, audits, and disputes<br/><br/>🚨 <strong>Emergency Escalation</strong><br/>In-app distress signal → notifies AURAA operations + owner + emergency contact<br/><br/><strong>Trust is not a feature. It is the infrastructure.</strong>`},
-
-  // ── 11. BUSINESS MODEL ─────────────────────────────────────
-  {title:'Business Model',body:`<strong>Every trip feeds the ecosystem.</strong><br/><br/><strong>AURAA GO</strong> (standard rides):<br/>Driver 55% • Vehicle Owner 25% • Platform 20%<br/><br/><strong>AURAA ASSIST</strong> (your car · our driver):<br/>Driver 50% • Vehicle Owner 30% • Platform 20%<br/><br/><strong>AURAA BIKE</strong> (motorcycle dispatch):<br/>Biker 65% • Dispatcher (owner) 15% • Platform 20%<br/><br/><strong>AURAA SKATE</strong> &amp; <strong>BICYCLE</strong>:<br/>Operator 80% • Platform 20%<br/><br/><em style="font-size:.72rem;color:var(--muted);">Insurance and telco costs are absorbed within the Platform share as operational expenses — not deducted from operator earnings.</em><br/><br/><strong>Additional revenue streams:</strong><br/>• Fix-it monthly subscriptions — mechanics pay for visibility<br/>• Fleet leasing &amp; corporate accounts<br/>• SaaS/API access — fleet operators<br/><br/><em style="color:var(--gold);">Multiple recurring layers — not a single-stream bet.</em>`},
-
-  // ── 12. UNIT ECONOMICS ─────────────────────────────────────
-  {title:'Unit Economics',body:`<strong>Sample AURAA ASSIST Trip — ₦3,800</strong><br/><br/>Driver (50%): ₦1,900<br/>Vehicle Owner (30%): ₦1,140<br/>Platform (20%): ₦760<br/><br/><em style="font-size:.72rem;color:var(--muted);">Platform share covers insurance, telco verification, payment rail, infrastructure, and growth.</em><br/><br/><strong>Platform net per trip: ₦760</strong><br/>At 500 trips/day → ₦380,000 platform revenue/day<br/>At 10,000 trips/day → ₦7.6M platform revenue/day<br/><br/><em style="color:var(--gold);">ASSIST generates 2× the owner loyalty of standard ride-hailing because the owner keeps their vehicle and earns from it.</em>`},
-
-  // ── 13. TRACTION ───────────────────────────────────────────
-  {title:'Traction',body:`✅ Fully functional MVP deployed at app.auraahq.com<br/>✅ Multi-role testing — riders, drivers, owners, admin<br/>✅ Real usage flows completed across all 5 services<br/>✅ Live Flutterwave payment integration with server-side verification<br/>✅ Insurance discussions in progress with carrier partners<br/>✅ Airtel Nigeria — M2M SIM discussions active<br/>✅ CAC registered December 2025 (RC 9058278)<br/>✅ Mechanics network onboarding underway<br/>✅ Skater community onboarding underway<br/>✅ BKR Capital, Madica, Pi Network Ventures, Future Africa — engaged<br/><br/>Early feedback is focused on trust, insurance, and control.<br/><strong style="color:var(--gold);">Users are not confused. They are asking real operational questions.</strong>`},
-
-  // ── 13b. FOUNDING USER CAMPAIGN (LIVE) ─────────────────────
-  {title:'Founding User Campaign — Live Numbers',body:(()=>{
-    const t = FU.totalFoundingUsers();
-    const caps = FU.countPerRole();
-    const pledges = FU.pledgesOn();
-    const journeys = (()=>{
-      const all = JSON.parse(localStorage.getItem(FU._journeyKey) || '{}');
-      return Object.values(all).reduce((s,o)=>s+Object.keys(o||{}).length, 0);
-    })();
-    return `<strong>We are actively recruiting 6,600 founding users across 5 roles.</strong><br/><br/>
-<div style="background:rgba(201,168,76,.08);border-radius:10px;padding:.75rem;margin:.5rem 0;">
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
-    <div style="text-align:center;padding:.4rem;"><div style="font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800;color:var(--gold);">${t.toLocaleString()}</div><div style="font-size:.65rem;color:var(--muted);">Registered</div></div>
-    <div style="text-align:center;padding:.4rem;"><div style="font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800;color:var(--gold);">${FU.TOTAL.toLocaleString()}</div><div style="font-size:.65rem;color:var(--muted);">Campaign Cap</div></div>
-    <div style="text-align:center;padding:.4rem;"><div style="font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800;color:var(--gold);">${pledges}</div><div style="font-size:.65rem;color:var(--muted);">Save→Own Pledges</div></div>
-    <div style="text-align:center;padding:.4rem;"><div style="font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800;color:var(--gold);">${journeys}</div><div style="font-size:.65rem;color:var(--muted);">Journeys Completed</div></div>
-  </div>
-</div>
-<strong>Per-Role Breakdown (live):</strong><br/>
-🧍 Riders: <strong>${(caps.rider||0).toLocaleString()}</strong> / ${FU.CAPS.rider.toLocaleString()}<br/>
-🚗 Drivers + 🛼 Skaters: <strong>${(caps.driver||0).toLocaleString()}</strong> / ${FU.CAPS.driver.toLocaleString()}<br/>
-🏷️ Owners (car+bike): <strong>${(caps.owner||0).toLocaleString()}</strong> / ${FU.CAPS.owner.toLocaleString()}<br/>
-🏍️ Bike Riders: <strong>${(caps.biker||0).toLocaleString()}</strong> / ${FU.CAPS.biker.toLocaleString()}<br/>
-🚲 Bicycle Riders: <strong>${(caps.bicycler||0).toLocaleString()}</strong> / ${FU.CAPS.bicycler.toLocaleString()}<br/>
-🔧 Mechanics: <strong>${(caps.mechanic||0).toLocaleString()}</strong> / ${FU.CAPS.mechanic.toLocaleString()}<br/><br/>
-<em style="color:var(--gold);">Multi-role registration: same email can register across multiple roles. Each adds to that role's counter.</em>`;
-  })()},
-
-  // ── 14. MARKET OPPORTUNITY ─────────────────────────────────
-  {title:'Market Opportunity',body:`Millions of vehicles across African cities are:<br/>• Underutilised — sitting idle while owners seek income<br/>• Poorly managed — no structured driver assignment or oversight<br/>• Disconnected from earning potential<br/><br/>Lagos alone: 22M+ people, 2M+ registered vehicles, one of the world's most congested cities.<br/><br/>AURAA unlocks:<br/>💰 <strong>Vehicle productivity</strong> — idle cars become income assets<br/>👤 <strong>Driver inclusion</strong> — access to vehicles without ownership<br/>🛡️ <strong>Structured mobility</strong> — trust, insurance, tracking built in<br/><br/><strong style="color:var(--gold);">This is not a niche. This is the entire informal vehicle economy formalised.</strong>`},
-
-  // ── 15. WHY LAGOS ──────────────────────────────────────────
-  {title:'Why We\'re Starting in Lagos',body:`<div style="margin-bottom:.75rem;font-size:.8rem;color:var(--gold);font-weight:700;letter-spacing:.08em;">MARKET STRATEGY</div>
-<strong style="color:var(--text);font-size:.95rem;">The most complex urban environment in Africa is our proof of concept — not our liability.</strong><br/><br/>
-<div style="margin:.75rem 0;">
-  <div style="margin-bottom:.45rem;">🔴 <strong>One of the most complex urban mobility environments globally</strong></div>
-  <div style="margin-bottom:.45rem;">🔴 <strong>High population density</strong> — extreme transport pressure</div>
-  <div style="margin-bottom:.45rem;">🔴 <strong>Fragmented, inefficient transport systems</strong></div>
-  <div style="margin-bottom:.45rem;">🔴 <strong>Deep trust &amp; control gaps</strong> between vehicle owners and drivers</div>
-  <div style="margin-bottom:.45rem;">🔴 <strong>Millions of underutilised</strong> privately owned vehicles</div>
-</div>
-<div style="background:var(--green);border:1px solid var(--gold);border-radius:10px;padding:.85rem;margin:1rem 0;text-align:center;">
-  <div style="font-size:.95rem;font-weight:800;font-style:italic;color:var(--gold);">"If AURAA works in Lagos, it can scale globally."</div>
-</div>
-<strong style="color:var(--gold);">Expansion Path:</strong><br/>
-Phase 1: Lagos — validation under real conditions<br/>
-Phase 2: Key African cities — Abuja · Nairobi · Accra · Johannesburg<br/>
-Phase 3: Global urban markets with high vehicle ownership gaps`},
-
-  // ── 16. DEFENSIBILITY ──────────────────────────────────────
-  {title:'Why We Win',  body:`<strong>"What stops Uber from copying this?"</strong><br/><br/>🔒 <strong>Assist logistics complexity</strong> — dispatching a driver to operate someone else's personal vehicle requires identity verification, insurance underwriting, owner consent logic, and vehicle matching. Uber's architecture is built for driver-owned vehicles only.<br/><br/>🤝 <strong>Owner-driver relationship layer</strong> — Uber has zero vehicle owner incentive. Our owners earn 25% passively. That loyalty is structural.<br/><br/>🌍 <strong>Cultural moat</strong> — AURAA is built for how Nigerians actually live. Uber doesn't understand this context. We live in it.<br/><br/>⚡ <strong>Community supply</strong> — 247 verified drivers from a real social network, assembled before funding. That cannot be replicated with a marketing budget.`},
-
-  // ── 17. STRATEGIC PARTNERS ─────────────────────────────────
-  {title:'Strategic Partners',body:`🛡️ <strong>Insurance Underwriter</strong> — Trip-based cover (interest confirmed, partner name protected until signature)<br/>💳 <strong>Flutterwave</strong> — Payment escrow &amp; settlement (onboarded)<br/>📡 <strong>Airtel Nigeria</strong> — M2M SIM verification (engaged)<br/>☁️ <strong>Netlify</strong> — Hosting &amp; deployment (live)<br/>🔗 <strong>Pi Network</strong> — Wallet integration (pipeline)<br/><br/><em style="font-size:.75rem;color:var(--muted);">Partnerships confirmed before a single dollar raised. This is what execution looks like.</em>`},
-
-  // ── 17. THE RAISE ──────────────────────────────────────────
-  {title:'The Raise',body:`<strong>$200,000 USD — Pre-Seed SAFE Note</strong><br/><br/>Valuation Cap: ₦1.2B–₦1.5B<br/>Instrument: SAFE (Simple Agreement for Future Equity)<br/>No immediate board seat at this stage<br/>Converts at next priced round (Series A)<br/><br/><strong>Use of funds:</strong><br/>• Engineering &amp; Mobile Apps: 40%<br/>• Driver Acquisition &amp; Onboarding: 25%<br/>• Insurance &amp; Telco Integration: 20%<br/>• Marketing &amp; Growth: 10%<br/>• Legal &amp; Operations: 5%<br/><br/><em style="color:var(--gold);">Pre-seed capital priced into the Series A round structure — direct entry at the foundation level.</em>`,metric:'$200,000',metricLabel:'Pre-Seed SAFE · Valuation Cap ₦1.2B–₦1.5B'},
-
-  // ── 18. WHY ME ─────────────────────────────────────────────
-  {title:'The Founder',body:`<strong>Mayowa Olakunle Olawale-Great</strong><br/>Founder &amp; CEO, AURAA Technologies Limited<br/><br/><em>"I didn't study this problem. I lived it."</em><br/><br/>20+ years working with people, coordination, and real-world systems across Lagos. Deep network across entertainment, logistics, and talent management.<br/><br/>• Koolblazes Modelling Agency (2006) — people, trust, and human logistics<br/>• Club M (2016) — experience infrastructure and community monetisation<br/>• AURAA (2025) — the system these years were building toward<br/><br/>Known as <strong>"The Plug"</strong> — I connect things that work.<br/><br/>I assembled 247 verified drivers, secured partnership interest from a Nigerian insurance underwriter, and built a live MVP — before asking anyone for money.<br/><br/><strong>I execute first. Then I ask.</strong><br/><br/>Advisor: Ayodeji Charles Alao-Peters — UK-Africa Cross-Border Investment`},
-
-  // ── 19. ROADMAP ────────────────────────────────────────────
-  {title:'Roadmap',body:`<strong>Q2 2026:</strong> Driver launch, first 100 trips, VI corridor<br/><strong>Q3 2026:</strong> Insurance API live, ASSIST scaling, 1,000 trips<br/><strong>Q4 2026:</strong> Fix-it Network live, Ikeja + Lekki expansion<br/><strong>Q1 2027:</strong> Series A raise ₦150M–₦200M<br/><strong>2027:</strong> Abuja, Port Harcourt, Accra<br/><strong>2028:</strong> Pan-African rollout`},
-
-  // ── 20. CLOSING ────────────────────────────────────────────
-  {title:'AURAA — The Operating System for Vehicle Mobility',body:`<div style="text-align:center;padding:.5rem 0;">
+  // ── 18. CLOSING ────────────────────────────────────────────
+  {title:'AURAA \u2014 Vehicle-First Mobility',body:`<div style="text-align:center;padding:.5rem 0;">
     <div style="font-size:.85rem;color:var(--muted);line-height:2;margin-bottom:1rem;">AURAA is not another ride-hailing app.<br/>It is a new mobility layer.<br/>A new economic model.<br/>A new way to move.</div>
-    <div style="font-size:1.1rem;font-weight:800;color:var(--gold);margin-bottom:.5rem;">Be Safe. Be Unstoppable.</div>
-    <div style="font-size:.8rem;color:var(--muted);font-style:italic;">Relax, we've got this.</div>
+    <div style="font-size:1.1rem;font-weight:800;color:var(--gold);margin-bottom:.5rem;">Relax. We\u2019ve got this.</div>
+    <div style="font-size:.78rem;color:var(--muted);margin-top:.75rem;">Mayowa Olakunle Olawale-Great<br/>mayowa@auraahq.com \u2022 +234 802 764 1047<br/>app.auraahq.com \u2022 RC 9058278</div>
   </div>`},
 
-  // ── 21. JOIN AURAA ─────────────────────────────────────────
-  {title:'Join AURAA — Choose Your Path',body:`<strong>Three clear ways to move forward:</strong><br/><br/>🔑 <strong>Join Allocation</strong> — Commit to the pre-seed SAFE. $200K target, valuation cap ₦1.2B–₦1.5B. No immediate board seat at this stage.<br/><br/>📞 <strong>Schedule a Call</strong> — 30-minute founder call. Bring your questions. Leave with answers.<br/><br/>📥 <strong>Request Full Deck</strong> — Full financial model, cap table, dilution scenarios, and legal term sheet sent directly.<br/><br/><strong>Use the buttons below to take the next step now.</strong>`},
+  // ── 19. NEXT STEPS ─────────────────────────────────────────
+  {title:'Next Steps',body:`<strong>Three ways to move forward:</strong><br/><br/>\ud83d\udd11 <strong>Join Allocation</strong> \u2014 Commit to the pre-seed SAFE. $200K target, $1.33M cap.<br/><br/>\ud83d\udcde <strong>Schedule a Call</strong> \u2014 30-minute founder call. Bring your questions.<br/><br/>\ud83d\udce5 <strong>Request Full Deck</strong> \u2014 Full financial model, cap table, and term sheet sent directly.<br/><br/><strong>Use the buttons below to take the next step.</strong>`},
 ];
 
 const hniSlides=[
@@ -9194,7 +9139,7 @@ const hniSlides=[
   {title:'What AURAA Does',body:`<strong>AURAA is a mobility operating system.</strong><br/><br/>Three services no single platform offers today:<br/>🚗 Driver dispatch for your own vehicle (ASSIST — globally exclusive)<br/>🚗 Standard ride-hailing (GO)<br/>🔧 Roadside assistance (FIX-IT)<br/><br/>One platform. One wallet. Owners earn passively while their car works.`},
   {title:'Why This Is Different',body:`AURAA ASSIST — a professional driver dispatched to operate <em>your own vehicle</em> — does not exist anywhere else in the world.<br/><br/>This is not an improvement on Uber. This is a new category.<br/><br/>First-mover advantage in a market of 22 million people in Lagos alone.`},
   {title:'The Vehicle Owner Angle',body:`<strong>Your car becomes an income-generating asset.</strong><br/><br/>AURAA GO: Owner earns 25% of every fare<br/>AURAA ASSIST: Owner earns 5% rebate on every trip<br/><br/>Deploy your vehicle. Monitor it live. Withdraw earnings.<br/><br/>This is passive income infrastructure — not just an app.`},
-  {title:'Traction Right Now',body:`✅ 247 verified drivers — ready to launch<br/>✅ MVP live at auraahq.netlify.app<br/>✅ Insurance underwriting partner — interest confirmed, signature in progress<br/>✅ Flutterwave — payment rail onboarded<br/>✅ CAC registered Dec 2025<br/><br/><strong>This is not a concept. This is a business ready to scale.</strong>`},
+  {title:'Traction Right Now',body:`✅ 37 founding users registered across all platform roles<br/>✅ MVP live at app.auraahq.com<br/>✅ Heirs Insurance — LOI signed (6 Aug 2026)<br/>✅ Flutterwave — payment rail onboarded<br/>✅ CAC registered Dec 2025<br/><br/><strong>This is not a concept. This is a business ready to scale.</strong>`},
   {title:'Why Lagos — And Why It Matters Globally',body:`<div style="margin-bottom:.75rem;font-size:.78rem;color:var(--gold);font-weight:700;letter-spacing:.08em;">MARKET STRATEGY</div>
 <strong style="color:var(--text);">Lagos is not a risk factor. It is a proof factory.</strong><br/><br/>
 <div style="margin:.65rem 0;">
@@ -9211,9 +9156,9 @@ Phase 1: Lagos — live validation<br/>
 Phase 2: Abuja · Nairobi · Accra · Johannesburg<br/>
 Phase 3: Global urban markets`},
   {title:'The HNI Founding Partner Terms',body:`<strong>₦85,000,000 total pool • 4 slots only</strong><br/><br/>Minimum per investor: ₦21,250,000<br/>Equity per slot: 1.25%<br/>Total HNI equity: 5%<br/>Instrument: Direct equity participation<br/>No immediate board seat at this stage<br/>Pro-rata rights at Series A<br/><br/><strong>Pre-money valuation: ₦1.2B–₦1.5B</strong><br/><br/>HNI participation is structured in naira, which reduces FX exposure while maintaining upside tied to global valuation growth.`,metric:'₦21.25M',metricLabel:'Per Slot • 1.25% Equity • 4 Slots Only'},
-  {title:'Why Get In Now',body:`<strong>This is the lowest valuation you will ever see AURAA at.</strong><br/><br/>• Series A is planned for Q1 2027 at significantly higher valuation<br/>• First 100 trips will trigger institutional interest<br/>• Insurance underwriting partnership adds credibility and de-risks operations<br/>• 247 drivers = immediate revenue potential on funding<br/><br/>Early partners get pro-rata rights — meaning you can invest again at Series A to protect your position.`},
+  {title:'Why Get In Now',body:`<strong>This is the lowest valuation you will ever see AURAA at.</strong><br/><br/>• Series A is planned for Q1 2027 at significantly higher valuation<br/>• First 100 trips will trigger institutional interest<br/>• Insurance underwriting partnership adds credibility and de-risks operations<br/>• 37 founding users + Founding Trip Challenge live<br/><br/>Early partners get pro-rata rights — meaning you can invest again at Series A to protect your position.`},
   {title:'What Your Capital Does',body:`<strong>₦21.25M unlocks:</strong><br/><br/>• Driver onboarding and verification at scale<br/>• Insurance API integration with underwriting partner<br/>• Telco identity layer with Airtel Nigeria<br/>• Lagos marketing push — VI, Lekki, Ikeja corridors<br/>• Mobile app development (iOS + Android)<br/><br/>Your money moves the platform from MVP to revenue-generating operation.`},
-  {title:'The Founder',body:`<strong>Mayowa Olakunle Olawale-Great</strong><br/><br/>20+ years building businesses in Lagos.<br/>Koolblazes Modelling Agency (2006) • Club M (2016) • AURAA (2025)<br/><br/>He built AURAA's MVP, assembled 247 drivers, and secured partnership interest from a Nigerian insurance underwriter — all before raising a single naira.<br/><br/>This is someone who executes before asking. Your capital accelerates what's already moving.`},
+  {title:'The Founder',body:`<strong>Mayowa Olakunle Olawale-Great</strong><br/><br/>20+ years building businesses in Lagos.<br/>Koolblazes Modelling Agency (2006) • Club M (2016) • AURAA (2025)<br/><br/>He built AURAA's MVP, secured the Heirs Insurance LOI and processed the first real Flutterwave payment — all before raising a single naira.<br/><br/>This is someone who executes before asking. Your capital accelerates what's already moving.`},
   {title:'Your Position as a Founding Partner',body:`<strong>4 founding partner slots. This is not a marketing line.</strong><br/><br/>The structure is fixed. When 4 investors commit, the HNI pool closes permanently.<br/><br/><strong>Founding partners receive:</strong><br/>• Named acknowledgment in company records<br/>• Direct founder access (WhatsApp + quarterly calls)<br/>• Priority allocation in future rounds<br/>• Preferential access to expansion opportunities<br/>• Strategic advisory influence (informal)<br/>• First right of refusal at Series A<br/><br/><em>You're not just invested. You're inside.</em><br/><br/><strong>VCs are investing into the future round structure.<br/>You are entering directly at the foundation level.</strong><br/><br/>This conversation is your invitation. The next step is yours.`},
 ];
 
