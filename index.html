@@ -4767,8 +4767,8 @@ function getSplits(svc,fare,ctx){
     // v11.9.2 — dispatch IS a two-wheel job. It had no entry here and fell back
     // to GO 55/25/20, paying a phantom Vehicle Owner 25% on dispatch trips.
     dispatch: _twoWheel,
-    skate:   [['Skater (80%)',.80],['Platform (20%)',.20]],
-    bicycle: [['Cyclist (80%)',.80],['Platform (20%)',.20]],
+    skate:   [['Skater (75%)',.75],['Platform (25%)',.25]],
+    bicycle: [['Cyclist (75%)',.75],['Platform (25%)',.25]],
   };
   // v11.9.2 — Legs must sum to the fare EXACTLY. Per-leg Math.round drifted ±₦1
   // on odd-half fares (₦9,550 ledgered as ₦9,551 on 10 Jun). Floor each leg,
@@ -8305,7 +8305,7 @@ function _deliveryLikeJourney(me, role, fare, from, to){
       <div><span style="color:var(--muted);">To:</span> <strong>${to}</strong></div>
       <div><span style="color:var(--muted);">Fare:</span> <strong style="color:var(--gold);">₦${fare.toLocaleString()}</strong></div>
       <div style="margin-top:.4rem;padding:.5rem;background:rgba(201,168,76,.07);border-radius:8px;font-size:.72rem;">
-        ${role==='bicycler'?'Cyclist 80% · Platform 20%':'Biker 80% · Platform 20%'}
+        ${role==='bicycler'?'Cyclist 75% · Platform 25%':'Biker 80% · Platform 20%'}
       </div>
     </div>
     <div style="margin-top:.85rem;">
@@ -8405,8 +8405,8 @@ function renderBikerEarnings(){
   const max = Math.max(...vals);
   const monthTotal = vals.reduce((a,b)=>a+b,0) * 4;
   const tripsThisMonth = role==='bicycler' ? 18 : role==='skater' ? 22 : 34;
-  const splitNote = role==='bicycler' ? 'You earn 80% of every delivery'
-                  : role==='skater'   ? 'You earn 80% of every dispatch'
+  const splitNote = role==='bicycler' ? 'You earn 75% of every delivery'
+                  : role==='skater'   ? 'You earn 75% of every dispatch'
                   :                     'You earn 60% of every delivery';
 
   mc.innerHTML = `
@@ -8481,7 +8481,7 @@ function _renderRiderJobsSimple(role){
 }
 
 function _bikerAccept(role, id, fare, from, to){
-  const earn = role==='bicycler'?Math.round(fare*0.8):(role==='skater'?Math.round(fare*0.8):Math.round(fare*0.6));
+  const earn = role==='bicycler'?Math.round(fare*0.75):(role==='skater'?Math.round(fare*0.75):Math.round(fare*0.6));
   S.driverWallet += earn;
   localStorage.setItem('auraa_driver_wallet', S.driverWallet);
   logTx({title:`AURAA ${role.toUpperCase()} — ${from} → ${to}`, amount:earn, type:'credit'});
@@ -9082,7 +9082,7 @@ const vcSlides=[
   {title:'Five Services. One Platform.',body:`<strong>Each service targets a different urban mobility need:</strong><br/><br/>\ud83d\ude97 <strong>AURAA GO</strong> \u2014 Standard ride-hailing. Owner vehicles, vetted drivers.<br/>\ud83d\ude9b <strong>AURAA ASSIST</strong> \u2014 Vetted driver dispatched to operate the owner\u2019s own vehicle.<br/>\ud83c\udfcd\ufe0f <strong>AURAA BIKE</strong> \u2014 Motorbike dispatch and delivery via dispatcher network.<br/>\ud83d\udef9 <strong>AURAA SKATE</strong> \u2014 Skater-powered last-mile delivery corridors.<br/>\ud83d\udeb2 <strong>AURAA BICYCLE</strong> \u2014 Last-mile cyclist deliveries.<br/><br/><em style="color:var(--gold);">Multi-service architecture scales with city density tiers.</em>`},
 
   // ── 6. HOW AURAA EARNS ─────────────────────────────────────
-  {title:'How AURAA Earns',body:`<strong>Every trip splits at locked ratios. Platform absorbs insurance and ops.</strong><br/><br/><div style="font-size:.78rem;line-height:2;"><div><strong>GO:</strong> Driver 55% \u2022 Owner 25% \u2022 Platform 20%</div><div><strong>ASSIST:</strong> Driver 50% \u2022 Owner 30% \u2022 Platform 20%</div><div><strong>BIKE:</strong> Biker 65% \u2022 Dispatcher 15% \u2022 Platform 20%</div><div><strong>SKATE:</strong> Skater 75% \u2022 Platform 25%</div><div><strong>BICYCLE:</strong> Cyclist 75% \u2022 Platform 25%</div></div><br/><em style="font-size:.75rem;color:var(--muted);">The driver earns the most because the driver does the work. The rider sees one clean price.</em>`},
+  {title:'How AURAA Earns',body:`<strong>Every trip splits at locked ratios. Platform absorbs insurance and ops.</strong><br/><br/><div style="font-size:.78rem;line-height:2;"><div><strong>GO:</strong> Driver 55% \u2022 Owner 25% \u2022 Platform 20%</div><div><strong>ASSIST:</strong> Driver 50% \u2022 Owner 30% \u2022 Platform 20%</div><div><strong>BIKE (self):</strong> Owner-Biker 80% \u2022 Platform 20%</div><div><strong>BIKE (fleet):</strong> Biker 60% \u2022 Owner 20% \u2022 Platform 20%</div><div><strong>SKATE:</strong> Skater 75% \u2022 Platform 25%</div><div><strong>BICYCLE:</strong> Cyclist 75% \u2022 Platform 25%</div></div><br/><em style="font-size:.75rem;color:var(--muted);">The driver earns the most because the driver does the work. The rider sees one clean price.</em>`},
 
   // ── 7. AURAA ASSIST ────────────────────────────────────────
   {title:'AURAA Assist \u2014 The Category Creator',body:`<strong>A vetted driver dispatched to operate your own car.</strong><br/><br/>\u2705 Owner keeps full control of their vehicle<br/>\u2705 No asset risk \u2014 driver is vetted and paired<br/>\u2705 Use cases: night out, medical trip, school run, airport run, elderly support<br/><br/><strong>This is not ride-hailing. This is controlled mobility.</strong><br/><br/>ASSIST is also the supply engine: every vehicle that enters through ASSIST becomes available for GO. One onboarding, two services.<br/><br/><em style="color:var(--gold);">No other platform offers this anywhere.</em>`},
@@ -9388,6 +9388,387 @@ function toggleTheme(){
 }
 
 // Logo triple-tap handled inline on header element
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AURAA v12 CONTROLLED LIVE PILOT
+   Activated only with ?pilot=1. Legacy demo UX remains untouched otherwise.
+   Uses Supabase Auth + pilot_* tables created in migration 001_pilot_foundation.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+  const PILOT_URL='https://yroffdxgkppmqngybboj.supabase.co';
+  const PILOT_KEY='sb_publishable_OcRlo6xhsrvzSWCG5dGkoA_AYqt-fdh';
+  const PILOT_ENABLED=new URLSearchParams(location.search).get('pilot')==='1';
+  if(!PILOT_ENABLED || !window.supabase?.createClient) return;
+
+  const pclient=window.supabase.createClient(PILOT_URL,PILOT_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  let pilotRole=null, pilotProfile=null, pilotTrip=null, geoWatch=null;
+
+  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const toast=m=>{ try{showToast('AURAA Pilot · '+m)}catch(_){alert('AURAA Pilot · '+m)} };
+
+  function shell(body){
+    let el=document.getElementById('auraaPilot');
+    if(!el){
+      el=document.createElement('div'); el.id='auraaPilot';
+      el.style.cssText='position:fixed;inset:0;z-index:10050;background:var(--dark);overflow:auto;padding:1rem;';
+      document.body.appendChild(el);
+    }
+    el.innerHTML='<div style="max-width:520px;margin:0 auto;padding:1rem 0 3rem;">'+body+'</div>';
+    return el;
+  }
+  function card(title,body){
+    return `<div class="card" style="border-color:var(--gold);"><div class="card-title">${title}</div>${body}</div>`;
+  }
+
+  async function session(){
+    const {data}=await pclient.auth.getSession();
+    return data?.session||null;
+  }
+
+  function authScreen(msg=''){
+    shell(`
+      <div class="journey-header">
+        <div><div class="journey-title">AURAA CONTROLLED PILOT</div><div class="journey-sub">Real trips · restricted access</div></div>
+        <div class="journey-step-pill">v12</div>
+      </div>
+      ${msg?`<div class="alert-row alert-warn">${esc(msg)}</div>`:''}
+      ${card('Pilot sign in / registration',`
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="pilotEmail" type="email" autocomplete="email" placeholder="your approved pilot email"></div>
+        <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="pilotPassword" type="password" autocomplete="current-password" placeholder="Minimum 8 characters"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;">
+          <button class="btn btn-primary" id="pilotSignIn">Sign in</button>
+          <button class="btn btn-outline" id="pilotSignUp">Create account</button>
+        </div>
+        <div style="font-size:.7rem;color:var(--muted);line-height:1.5;margin-top:.75rem;">Only emails explicitly enabled in AURAA's pilot access list can activate a pilot role.</div>
+      `)}
+    `);
+    document.getElementById('pilotSignIn').onclick=async()=>{
+      const email=document.getElementById('pilotEmail').value.trim().toLowerCase(), password=document.getElementById('pilotPassword').value;
+      if(!email||!password) return toast('Enter email and password');
+      const {error}=await pclient.auth.signInWithPassword({email,password});
+      if(error) return authScreen(error.message);
+      roleScreen();
+    };
+    document.getElementById('pilotSignUp').onclick=async()=>{
+      const email=document.getElementById('pilotEmail').value.trim().toLowerCase(), password=document.getElementById('pilotPassword').value;
+      if(!email||password.length<8) return toast('Use an email and password of at least 8 characters');
+      const {data,error}=await pclient.auth.signUp({email,password});
+      if(error) return authScreen(error.message);
+      if(!data.session) return authScreen('Check your email, confirm the account, then sign in.');
+      roleScreen();
+    };
+  }
+
+  async function roleScreen(){
+    const s=await session();
+    if(!s) return authScreen();
+    shell(`
+      <div class="journey-header"><div><div class="journey-title">AURAA CONTROLLED PILOT</div><div class="journey-sub">${esc(s.user.email)}</div></div><button class="btn btn-outline btn-sm" id="pilotOut">Sign out</button></div>
+      ${card('Choose pilot role',`
+        <div class="role-cards" style="max-width:none;">
+          <div class="role-card" data-role="rider"><div class="role-icon">🧍</div><div class="role-name">Rider</div><div class="role-desc">Book and ride</div></div>
+          <div class="role-card" data-role="driver"><div class="role-icon">🚗</div><div class="role-name">Driver</div><div class="role-desc">Accept and run trips</div></div>
+          <div class="role-card" data-role="owner"><div class="role-icon">🔑</div><div class="role-name">Owner</div><div class="role-desc">Monitor vehicle trips</div></div>
+        </div>
+      `)}
+    `);
+    document.getElementById('pilotOut').onclick=async()=>{await pclient.auth.signOut();authScreen();};
+    document.querySelectorAll('#auraaPilot [data-role]').forEach(x=>x.onclick=()=>bindRole(x.dataset.role));
+  }
+
+  async function bindRole(role){
+    const s=await session(); if(!s) return authScreen();
+    const {data,error}=await pclient.rpc('pilot_bind_profile',{p_email:s.user.email,p_role:role});
+    if(error) return roleScreenWithError(error.message);
+    pilotRole=role; pilotProfile=data;
+    if(role==='rider') return riderHome();
+    if(role==='driver') return driverHome();
+    return ownerHome();
+  }
+
+  function roleScreenWithError(msg){
+    roleScreen().then(()=>{setTimeout(()=>toast(msg),50)});
+  }
+
+  async function riderHome(){
+    const s=await session();
+    const me=s.user.email;
+    const {data:rows,error}=await pclient.from('pilot_trips').select('*').eq('rider_user_id',s.user.id).order('created_at',{ascending:false}).limit(20);
+    const trips=rows||[];
+    shell(`
+      <div class="journey-header"><div><div class="journey-title">RIDER PILOT</div><div class="journey-sub">${esc(me)}</div></div><button class="btn btn-outline btn-sm" id="pilotRiderOut">Exit</button></div>
+      ${card('Book a real pilot trip',`
+        <div class="form-group"><label class="form-label">Service</label>
+          <select class="form-input" id="pSvc"><option value="go">AURAA GO</option><option value="assist">AURAA ASSIST</option><option value="bike">AURAA BIKE</option><option value="skate">AURAA SKATE</option><option value="bicycle">AURAA BICYCLE</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Pickup</label><input class="form-input" id="pFrom" placeholder="Type address or landmark" autocomplete="off"><div id="pFromDrop" style="display:none;max-height:200px;overflow-y:auto;background:var(--dark2);border:1px solid var(--dark3);border-radius:8px;margin-top:2px;"></div></div>
+        <div class="form-group"><label class="form-label">Destination</label><input class="form-input" id="pTo" placeholder="Type address or landmark" autocomplete="off"><div id="pToDrop" style="display:none;max-height:200px;overflow-y:auto;background:var(--dark2);border:1px solid var(--dark3);border-radius:8px;margin-top:2px;"></div></div>
+        <div id="pFareDisplay" style="display:none;background:var(--dark3);border-radius:10px;padding:.75rem;margin-bottom:.75rem;text-align:center;">
+          <div style="font-size:.7rem;color:var(--muted);">ESTIMATED FARE</div>
+          <div id="pFareAmount" style="font-size:1.4rem;font-weight:800;color:var(--gold);"></div>
+          <div id="pFareDetail" style="font-size:.65rem;color:var(--muted);margin-top:.25rem;"></div>
+        </div>
+        <input type="hidden" id="pFare" value="">
+        <input type="hidden" id="pFromLat" value="">
+        <input type="hidden" id="pFromLng" value="">
+        <input type="hidden" id="pToLat" value="">
+        <input type="hidden" id="pToLng" value="">
+        <button class="btn btn-gold" id="pBook">Create trip & pay</button>
+        <div style="font-size:.68rem;color:var(--muted);margin-top:.6rem;">Fares calculate automatically based on real distance. Powered by OpenStreetMap geocoding.</div>
+      `)}
+      ${card('Recent pilot trips',trips.length?trips.map(t=>`<div class="visitor-row" style="cursor:default;"><div class="visitor-row-name">${esc(t.origin)} → ${esc(t.destination)}</div><div class="visitor-row-meta">${esc(t.status)} · ₦${Number(t.fare).toLocaleString()} · ${new Date(t.created_at).toLocaleString()}</div></div>`).join(''):'<div class="empty-state">No pilot trips yet.</div>')}
+    `);
+    document.getElementById('pilotRiderOut').onclick=()=>roleScreen();
+    document.getElementById('pBook').onclick=()=>createPilotTrip();
+  }
+
+  async function createPilotTrip(){
+    const s=await session(); if(!s) return authScreen();
+    const service=document.getElementById('pSvc').value;
+    const from=document.getElementById('pFrom').value.trim(), to=document.getElementById('pTo').value.trim();
+    const fare=Math.round(Number(document.getElementById('pFare').value));
+    if(!from||!to||!fare||fare<100) return toast('Select pickup and destination from the suggestions');
+    const fromLat=parseFloat(document.getElementById('pFromLat').value)||null;
+    const fromLng=parseFloat(document.getElementById('pFromLng').value)||null;
+    const toLat=parseFloat(document.getElementById('pToLat').value)||null;
+    const toLng=parseFloat(document.getElementById('pToLng').value)||null;
+
+    const {data:tripId,error}=await pclient.rpc('pilot_create_trip',{
+      p_service:service,p_origin:from,p_destination:to,p_fare:fare,p_bike_ownership:'self',
+      p_origin_lat:fromLat,p_origin_lng:fromLng,p_destination_lat:toLat,p_destination_lng:toLng
+    });
+    if(error) return toast(error.message);
+    pilotTrip=tripId;
+    const tx_ref='AURAA-PILOT-TRIP-'+Date.now()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    const pub=(typeof FlutterwaveConfig!=='undefined'&&FlutterwaveConfig.PUBLIC_KEY)||'';
+    if(!pub) return toast('Flutterwave public key unavailable');
+
+    FlutterwaveCheckout({
+      public_key:pub,tx_ref,amount:fare,currency:'NGN',
+      payment_options:'card,ussd,banktransfer,opay',
+      customer:{email:s.user.email,name:s.user.user_metadata?.full_name||s.user.email},
+      customizations:{title:'AURAA Pilot Trip Payment',description:`${from} → ${to}`},
+      meta:{purpose:'pilot_trip_payment',pilot_trip_id:tripId},
+      callback:async(resp)=>{
+        if(!resp?.transaction_id) return toast('Payment was not completed');
+        toast('Payment received — verifying');
+        const token=(await pclient.auth.getSession()).data.session?.access_token;
+        const vr=await fetch('/.netlify/functions/pilot-verify-payment',{
+          method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+          body:JSON.stringify({trip_id:tripId,tx_ref,transaction_id:String(resp.transaction_id)})
+        });
+        const out=await vr.json().catch(()=>({}));
+        if(!vr.ok||!out.verified) return toast(out.error||'Payment verification failed');
+        pilotTrip=tripId; riderTripScreen(tripId);
+      }
+    });
+  }
+
+  async function riderTripScreen(tripId){
+    const {data:t,error}=await pclient.from('pilot_trips').select('*').eq('id',tripId).single();
+    if(error||!t) return riderHome();
+    pilotTrip=tripId;
+    shell(`
+      <div class="journey-header"><div><div class="journey-title">LIVE PILOT TRIP</div><div class="journey-sub">${esc(t.origin)} → ${esc(t.destination)}</div></div><span class="journey-step-pill">${esc(t.status)}</span></div>
+      ${card('Trip status',`
+        <div class="stats-grid">
+          <div class="stat-box"><div class="stat-val">₦${Number(t.fare).toLocaleString()}</div><div class="stat-lbl">Fare</div></div>
+          <div class="stat-box"><div class="stat-val">${esc(t.payment_status)}</div><div class="stat-lbl">Payment</div></div>
+        </div>
+        <div style="font-size:.78rem;line-height:1.8;">
+          <div><strong>Driver:</strong> ${esc(t.driver_email||'Waiting for driver')}</div>
+          <div><strong>Vehicle:</strong> ${esc(t.vehicle||'Approved vehicle pending')}</div>
+          <div><strong>Reference:</strong> ${esc(t.id)}</div>
+        </div>
+        <button class="btn btn-outline" id="sharePilot" style="margin-top:.9rem;">Share trip details</button>
+        <button class="btn btn-danger" id="cancelPilot" style="margin-top:.5rem;">Cancel trip</button>
+      `)}
+      ${card('Timeline',`
+        <div class="timeline">
+          ${[['accepted','Driver accepted'],['en_route','Driver en route'],['arrived','Driver arrived'],['in_trip','Trip started'],['completed','Trip completed']].map(([st,lab])=>`<div class="tl-item ${t.status===st?'active':''} ${['completed'].includes(t.status)?'done':''}"><div>${lab}</div></div>`).join('')}
+        </div>
+      `)}
+    `);
+    document.getElementById('cancelPilot').onclick=async()=>{await transition(t.id,'cancelled','Rider cancelled');riderHome();};
+    document.getElementById('sharePilot').onclick=()=>navigator.share?navigator.share({title:'AURAA pilot trip',text:`AURAA trip ${t.id}\n${t.origin} → ${t.destination}\nStatus: ${t.status}\nDriver: ${t.driver_email||'Pending'}`}):navigator.clipboard?.writeText(`AURAA trip ${t.id}\n${t.origin} → ${t.destination}\nStatus: ${t.status}`);
+    if(!['completed','cancelled','expired'].includes(t.status)) setTimeout(()=>riderTripScreen(tripId),5000);
+  }
+
+  async function driverHome(){
+    const {data:rows}=await pclient.from('pilot_trips').select('*').eq('status','searching').eq('payment_status','verified').order('created_at',{ascending:false}).limit(10);
+    shell(`
+      <div class="journey-header"><div><div class="journey-title">DRIVER PILOT</div><div class="journey-sub">Verified paid requests</div></div><button class="btn btn-outline btn-sm" id="driverOut">Exit</button></div>
+      ${card('Trip requests',rows?.length?rows.map(t=>`
+        <div class="trip-request">
+          <div class="trip-req-header"><span class="trip-service-tag">${esc(t.service.toUpperCase())}</span><span class="trip-fare-tag">₦${Number(t.fare).toLocaleString()}</span></div>
+          <div class="trip-route"><div class="trip-from">FROM · <span>${esc(t.origin)}</span></div><div class="trip-to">TO · <span>${esc(t.destination)}</span></div></div>
+          <button class="btn btn-gold btn-sm" data-accept="${t.id}">Accept trip</button>
+        </div>`).join(''):'<div class="empty-state">No verified requests waiting.</div>')}
+    `);
+    document.getElementById('driverOut').onclick=()=>roleScreen();
+    document.querySelectorAll('[data-accept]').forEach(b=>b.onclick=()=>driverAccept(b.dataset.accept));
+  }
+
+  async function driverAccept(id){
+    const out=await transition(id,'accepted','');
+    if(out?.ok){pilotTrip=id;driverTripScreen(id);}
+  }
+
+  async function driverTripScreen(id){
+    const {data:t,error}=await pclient.from('pilot_trips').select('*').eq('id',id).single();
+    if(error||!t) return driverHome();
+    pilotTrip=id;
+    const next = {accepted:'en_route',en_route:'arrived',arrived:'in_trip',in_trip:'completed'}[t.status];
+    const label = {accepted:'Start en route',en_route:'Arrived at pickup',arrived:'Start trip',in_trip:'Complete trip'}[t.status];
+    shell(`
+      <div class="journey-header"><div><div class="journey-title">ACTIVE PILOT TRIP</div><div class="journey-sub">${esc(t.origin)} → ${esc(t.destination)}</div></div><span class="journey-step-pill">${esc(t.status)}</span></div>
+      ${card('Trip controls',`
+        <div style="font-size:.8rem;line-height:1.8;margin-bottom:1rem;">
+          <div><strong>Rider:</strong> ${esc(t.rider_email)}</div>
+          <div><strong>Fare:</strong> ₦${Number(t.fare).toLocaleString()}</div>
+          <div><strong>Payment:</strong> ${esc(t.payment_status)}</div>
+        </div>
+        ${next?`<button class="btn btn-gold" id="nextStep">${label}</button>`:''}
+        <button class="btn btn-danger" id="driverCancel" style="margin-top:.5rem;">Cancel trip</button>
+      `)}
+      ${card('Driver location',`
+        <div id="geoState" class="alert-row alert-warn">Location sharing is off.</div>
+        <button class="btn btn-outline" id="geoToggle">Share live location</button>
+      `)}
+    `);
+    if(next) document.getElementById('nextStep').onclick=async()=>{const o=await transition(id,next,'');if(o?.ok) driverTripScreen(id);};
+    document.getElementById('driverCancel').onclick=async()=>{await transition(id,'cancelled','Driver cancelled');stopGeo();driverHome();};
+    document.getElementById('geoToggle').onclick=()=>toggleGeo(id);
+    if(t.status==='in_trip' && !geoWatch) toggleGeo(id);
+  }
+
+  function toggleGeo(id){
+    if(!navigator.geolocation) return toast('GPS is not available in this browser');
+    const state=document.getElementById('geoState'),btn=document.getElementById('geoToggle');
+    if(geoWatch){stopGeo();return;}
+    state.className='alert-row alert-ok';state.textContent='Live location sharing enabled.';
+    btn.textContent='Stop live location';
+    geoWatch=navigator.geolocation.watchPosition(async pos=>{
+      const s=await session(); if(!s) return;
+      const {error}=await pclient.from('pilot_trip_locations').insert({
+        trip_id:id,user_id:s.user.id,latitude:pos.coords.latitude,longitude:pos.coords.longitude,
+        accuracy_m:pos.coords.accuracy,heading:pos.coords.heading,speed_mps:pos.coords.speed,recorded_at:new Date().toISOString()
+      });
+      if(error) console.warn('[AURAA pilot GPS]',error.message);
+    },err=>{state.className='alert-row alert-warn';state.textContent='GPS error: '+err.message;},{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+  }
+  function stopGeo(){
+    if(geoWatch!==null){navigator.geolocation.clearWatch(geoWatch);geoWatch=null;}
+    const b=document.getElementById('geoToggle'); if(b) b.textContent='Share live location';
+    const s=document.getElementById('geoState'); if(s){s.className='alert-row alert-warn';s.textContent='Location sharing is off.';}
+  }
+
+  async function ownerHome(){
+    const s=await session();
+    const {data:rows}=await pclient.from('pilot_trips').select('*').eq('owner_user_id',s.user.id).order('created_at',{ascending:false}).limit(20);
+    shell(`
+      <div class="journey-header"><div><div class="journey-title">OWNER PILOT MONITOR</div><div class="journey-sub">Your vehicle activity</div></div><button class="btn btn-outline btn-sm" id="ownerOut">Exit</button></div>
+      ${card('Pilot trip history',rows?.length?rows.map(t=>`<div class="visitor-row" style="cursor:default;"><div class="visitor-row-name">${esc(t.origin)} → ${esc(t.destination)}</div><div class="visitor-row-meta">${esc(t.status)} · ${esc(t.driver_email||'No driver')} · ₦${Number(t.fare).toLocaleString()}</div></div>`).join(''):'<div class="empty-state">No owner-attributed pilot trips yet.</div>')}
+    `);
+    document.getElementById('ownerOut').onclick=()=>roleScreen();
+  }
+
+  async function transition(id,status,reason){
+    const s=await session(); if(!s) {authScreen(); return null;}
+    const out=await pclient.rpc('pilot_transition_trip',{p_trip_id:id,p_to_status:status,p_reason:reason||null});
+    if(out.error){toast(out.error.message);return null;}
+    return out.data;
+  }
+
+  async function boot(){
+    document.getElementById('splash')?.classList.add('hidden');
+    document.getElementById('roleSelect')?.classList.remove('show');
+    document.getElementById('appHeader')?.classList.remove('show');
+    document.getElementById('tabBar')?.classList.remove('show');
+    document.getElementById('mainContent')?.classList.remove('show');
+    const s=await session();
+    if(s) roleScreen(); else authScreen();
+  }
+  pclient.auth.onAuthStateChange(()=>{});
+  boot();
+  window.AURAA_PILOT={client:pclient,signOut:()=>pclient.auth.signOut(),stopGeo};
+
+  // ── PILOT GEOCODING (Nominatim + LAGOS_LOCATIONS fallback) ──
+  const _pCache={};
+  let _pTimer=null;
+  const _pLoc={from:{lat:null,lng:null,name:''},to:{lat:null,lng:null,name:''}};
+
+  async function pilotGeoSearch(q){
+    if(!q||q.length<2) return [];
+    const ql=q.toLowerCase().trim();
+    // Check hardcoded locations first
+    const local=(typeof LAGOS_LOCATIONS!=='undefined'?LAGOS_LOCATIONS:[]).filter(l=>l.name.toLowerCase().includes(ql)).slice(0,3).map(l=>({name:l.name,area:l.area,lat:l.lat,lng:l.lng,live:false}));
+    if(local.length>=3) return local;
+    // Nominatim
+    if(_pCache[ql]) return [...local,..._pCache[ql]].slice(0,6);
+    try{
+      const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q+', Lagos, Nigeria')}&format=json&limit=5&bounded=1&viewbox=3.0,6.3,3.8,6.7&addressdetails=1`,{headers:{'Accept-Language':'en'}});
+      if(!r.ok) return local;
+      const d=await r.json();
+      const results=d.map(i=>({name:i.display_name.split(',').slice(0,2).join(',').trim(),area:i.address?.suburb||i.address?.city_district||'Lagos',lat:parseFloat(i.lat),lng:parseFloat(i.lon),live:true})).filter(r=>r.lat>=6.3&&r.lat<=6.75&&r.lng>=3.0&&r.lng<=3.8);
+      _pCache[ql]=results;
+      return [...local,...results].slice(0,6);
+    }catch(e){return local;}
+  }
+
+  function pilotAutocomplete(inputId,dropId,field){
+    const inp=document.getElementById(inputId);
+    const drop=document.getElementById(dropId);
+    if(!inp||!drop) return;
+    inp.addEventListener('input',()=>{
+      clearTimeout(_pTimer);
+      const q=inp.value.trim();
+      if(q.length<2){drop.style.display='none';return;}
+      _pTimer=setTimeout(async()=>{
+        const results=await pilotGeoSearch(q);
+        if(!results.length){drop.innerHTML='<div style="padding:.5rem;font-size:.72rem;color:var(--muted);">No results — try a landmark or street</div>';drop.style.display='block';return;}
+        drop.innerHTML=results.map(r=>`<div style="padding:.5rem .75rem;cursor:pointer;font-size:.78rem;border-bottom:1px solid var(--dark3);" onmousedown="event.preventDefault()" onclick="window._pSelect('${field}','${r.name.replace(/'/g,"\\'")}',${r.lat},${r.lng},'${inputId}','${dropId}')"><strong>${r.name}</strong>${r.live?' <span style="color:var(--gold);font-size:.6rem;">📍 LIVE</span>':''}<br/><span style="color:var(--muted);font-size:.65rem;">${r.area} · ${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}</span></div>`).join('');
+        drop.style.display='block';
+      },350);
+    });
+    inp.addEventListener('blur',()=>setTimeout(()=>{drop.style.display='none';},200));
+  }
+
+  window._pSelect=function(field,name,lat,lng,inputId,dropId){
+    _pLoc[field]={lat,lng,name};
+    document.getElementById(inputId).value=name;
+    document.getElementById(dropId).style.display='none';
+    if(field==='from'){document.getElementById('pFromLat').value=lat;document.getElementById('pFromLng').value=lng;}
+    else{document.getElementById('pToLat').value=lat;document.getElementById('pToLng').value=lng;}
+    pilotCalcFare();
+  };
+
+  function pilotCalcFare(){
+    const f=_pLoc.from, t=_pLoc.to;
+    if(!f.lat||!t.lat) return;
+    const R=6371, dLat=(t.lat-f.lat)*Math.PI/180, dLon=(t.lng-f.lng)*Math.PI/180;
+    const a=Math.sin(dLat/2)**2+Math.cos(f.lat*Math.PI/180)*Math.cos(t.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+    const km=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    const svc=document.getElementById('pSvc')?.value||'go';
+    const rates={go:{base:500,perKm:85,perMin:12,min:3000},assist:{base:1500,perKm:480,perMin:45,min:4000},bike:{base:300,perKm:60,perMin:8,min:1500},skate:{base:200,perKm:50,perMin:6,min:1000},bicycle:{base:200,perKm:45,perMin:5,min:800}};
+    const r=rates[svc]||rates.go;
+    const estMin=km*3;
+    const fare=Math.max(r.min,Math.round(r.base+(km*r.perKm)+(estMin*r.perMin)));
+    document.getElementById('pFare').value=fare;
+    const el=document.getElementById('pFareDisplay');
+    if(el){el.style.display='block';document.getElementById('pFareAmount').textContent='₦'+fare.toLocaleString();document.getElementById('pFareDetail').textContent=km.toFixed(1)+' km · ~'+Math.round(estMin)+' min · '+svc.toUpperCase();}
+  }
+
+  // Init autocomplete on pilot booking
+  setTimeout(()=>{
+    pilotAutocomplete('pFrom','pFromDrop','from');
+    pilotAutocomplete('pTo','pToDrop','to');
+    const svcEl=document.getElementById('pSvc');
+    if(svcEl) svcEl.addEventListener('change',pilotCalcFare);
+  },500);
+})();
 
 </script>
 
