@@ -9483,6 +9483,7 @@ function toggleTheme(){
     const {data,error}=await pclient.rpc('pilot_bind_profile',{p_email:s.user.email,p_role:role});
     if(error) return roleScreenWithError(error.message);
     pilotRole=role; pilotProfile=data;
+    ensurePilotRealtime();
     if(role==='rider') return riderHome();
     if(role==='driver') return driverHome();
     return ownerHome();
@@ -9503,8 +9504,8 @@ function toggleTheme(){
         <div class="form-group"><label class="form-label">Service</label>
           <select class="form-input" id="pSvc"><option value="go">AURAA GO</option><option value="assist">AURAA ASSIST</option><option value="bike">AURAA BIKE</option><option value="skate">AURAA SKATE</option><option value="bicycle">AURAA BICYCLE</option></select>
         </div>
-        <div class="form-group"><label class="form-label">Pickup</label><input class="form-input" id="pFrom" placeholder="Type address or landmark" autocomplete="off"><div id="pFromDrop" style="display:none;max-height:200px;overflow-y:auto;background:var(--dark2);border:1px solid var(--dark3);border-radius:8px;margin-top:2px;"></div></div>
-        <div class="form-group"><label class="form-label">Destination</label><input class="form-input" id="pTo" placeholder="Type address or landmark" autocomplete="off"><div id="pToDrop" style="display:none;max-height:200px;overflow-y:auto;background:var(--dark2);border:1px solid var(--dark3);border-radius:8px;margin-top:2px;"></div></div>
+        <div class="form-group"><label class="form-label">Pickup</label><div style="display:flex;gap:.4rem;"><input class="form-input" id="pFrom" placeholder="Type address or landmark" autocomplete="off"><button class="btn btn-outline btn-sm" id="pFromSearch" type="button">Search</button></div><div id="pFromDrop" style="display:none;max-height:200px;overflow-y:auto;background:var(--dark2);border:1px solid var(--dark3);border-radius:8px;margin-top:2px;"></div></div>
+        <div class="form-group"><label class="form-label">Destination</label><div style="display:flex;gap:.4rem;"><input class="form-input" id="pTo" placeholder="Type address or landmark" autocomplete="off"><button class="btn btn-outline btn-sm" id="pToSearch" type="button">Search</button></div><div id="pToDrop" style="display:none;max-height:200px;overflow-y:auto;background:var(--dark2);border:1px solid var(--dark3);border-radius:8px;margin-top:2px;"></div></div>
         <div id="pFareDisplay" style="display:none;background:var(--dark3);border-radius:10px;padding:.75rem;margin-bottom:.75rem;text-align:center;">
           <div style="font-size:.7rem;color:var(--muted);">ESTIMATED FARE</div>
           <div id="pFareAmount" style="font-size:1.4rem;font-weight:800;color:var(--gold);"></div>
@@ -9516,30 +9517,42 @@ function toggleTheme(){
         <input type="hidden" id="pToLat" value="">
         <input type="hidden" id="pToLng" value="">
         <button class="btn btn-gold" id="pBook">Create trip & pay</button>
-        <div style="font-size:.68rem;color:var(--muted);margin-top:.6rem;">Fares calculate automatically based on real distance. Powered by OpenStreetMap geocoding.</div>
+        <div style="font-size:.68rem;color:var(--muted);margin-top:.6rem;">Fare is calculated and locked by AURAA's pilot pricing service after you select both locations. Location search uses OpenStreetMap data. <span style="opacity:.8;">© OpenStreetMap contributors</span></div>
       `)}
       ${card('Recent pilot trips',trips.length?trips.map(t=>`<div class="visitor-row" style="cursor:default;"><div class="visitor-row-name">${esc(t.origin)} → ${esc(t.destination)}</div><div class="visitor-row-meta">${esc(t.status)} · ₦${Number(t.fare).toLocaleString()} · ${new Date(t.created_at).toLocaleString()}</div></div>`).join(''):'<div class="empty-state">No pilot trips yet.</div>')}
     `);
     document.getElementById('pilotRiderOut').onclick=()=>roleScreen();
     document.getElementById('pBook').onclick=()=>createPilotTrip();
+    initPilotBookingEnhancements();
   }
 
   async function createPilotTrip(){
     const s=await session(); if(!s) return authScreen();
     const service=document.getElementById('pSvc').value;
     const from=document.getElementById('pFrom').value.trim(), to=document.getElementById('pTo').value.trim();
-    const fare=Math.round(Number(document.getElementById('pFare').value));
-    if(!from||!to||!fare||fare<100) return toast('Select pickup and destination from the suggestions');
-    const fromLat=parseFloat(document.getElementById('pFromLat').value)||null;
-    const fromLng=parseFloat(document.getElementById('pFromLng').value)||null;
-    const toLat=parseFloat(document.getElementById('pToLat').value)||null;
-    const toLng=parseFloat(document.getElementById('pToLng').value)||null;
+    if(!from||!to) return toast('Select pickup and destination from the suggestions');
+    const fromLat=parseFloat(document.getElementById('pFromLat').value);
+    const fromLng=parseFloat(document.getElementById('pFromLng').value);
+    const toLat=parseFloat(document.getElementById('pToLat').value);
+    const toLng=parseFloat(document.getElementById('pToLng').value);
+    if(![fromLat,fromLng,toLat,toLng].every(Number.isFinite)) return toast('Please select both locations from the suggestions');
 
-    const {data:tripId,error}=await pclient.rpc('pilot_create_trip',{
-      p_service:service,p_origin:from,p_destination:to,p_fare:fare,p_bike_ownership:'self',
-      p_origin_lat:fromLat,p_origin_lng:fromLng,p_destination_lat:toLat,p_destination_lng:toLng
+    // The server is authoritative for the pilot fare. The browser's estimate is
+    // display-only and is never trusted for a real-money transaction.
+    const {data:quote,error}=await pclient.rpc('pilot_create_trip_v2',{
+      p_service:service,p_origin:from,p_destination:to,
+      p_origin_lat:fromLat,p_origin_lng:fromLng,p_destination_lat:toLat,p_destination_lng:toLng,
+      p_bike_ownership:'self'
     });
     if(error) return toast(error.message);
+    if(!quote?.trip_id || !Number.isFinite(Number(quote.fare))) return toast('Could not create the pilot trip');
+
+    const tripId=quote.trip_id;
+    const fare=Math.round(Number(quote.fare));
+    document.getElementById('pFare').value=fare;
+    document.getElementById('pFareAmount').textContent='₦'+fare.toLocaleString();
+    document.getElementById('pFareDetail').textContent=Number(quote.distance_km).toFixed(1)+' km · ~'+Math.round(Number(quote.duration_min))+' min · '+service.toUpperCase()+' · server priced';
+
     pilotTrip=tripId;
     const tx_ref='AURAA-PILOT-TRIP-'+Date.now()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
     const pub=(typeof FlutterwaveConfig!=='undefined'&&FlutterwaveConfig.PUBLIC_KEY)||'';
@@ -9609,6 +9622,9 @@ function toggleTheme(){
     `);
     document.getElementById('driverOut').onclick=()=>roleScreen();
     document.querySelectorAll('[data-accept]').forEach(b=>b.onclick=()=>driverAccept(b.dataset.accept));
+    if(!window._pilotDriverPoll) window._pilotDriverPoll=setInterval(()=>{
+      if(pilotRole==='driver' && !pilotTrip) driverHome();
+    },8000);
   }
 
   async function driverAccept(id){
@@ -9668,10 +9684,31 @@ function toggleTheme(){
   async function ownerHome(){
     const s=await session();
     const {data:rows}=await pclient.from('pilot_trips').select('*').eq('owner_user_id',s.user.id).order('created_at',{ascending:false}).limit(20);
+    const {data:assignments}=await pclient.from('pilot_driver_assignments').select('*').eq('owner_user_id',s.user.id).eq('active',true).order('created_at',{ascending:false});
     shell(`
       <div class="journey-header"><div><div class="journey-title">OWNER PILOT MONITOR</div><div class="journey-sub">Your vehicle activity</div></div><button class="btn btn-outline btn-sm" id="ownerOut">Exit</button></div>
+      ${card('Approve a pilot driver',`
+        <div class="form-group"><label class="form-label">Driver email</label><input class="form-input" id="paDriver" type="email" placeholder="driver@example.com"></div>
+        <div class="form-group"><label class="form-label">Vehicle</label><input class="form-input" id="paVehicle" placeholder="Toyota Camry 2020"></div>
+        <div class="form-group"><label class="form-label">Plate number</label><input class="form-input" id="paPlate" placeholder="ABC-123-XY"></div>
+        <div class="form-group"><label class="form-label">Vehicle ownership</label><select class="form-input" id="paOwn"><option value="fleet">Owner/fleet vehicle</option><option value="self">Driver-owned motorcycle</option></select></div>
+        <button class="btn btn-gold" id="paSave">Save approved assignment</button>
+        <div style="font-size:.68rem;color:var(--muted);margin-top:.55rem;">The driver must already have an active AURAA pilot Driver account.</div>
+      `)}
+      ${card('Active approved driver',assignments?.length?assignments.map(a=>`<div class="visitor-row" style="cursor:default;"><div class="visitor-row-name">${esc(a.driver_email)}</div><div class="visitor-row-meta">${esc(a.vehicle)} · ${esc(a.plate)}</div></div>`).join(''):'<div class="empty-state">No active driver assignment yet.</div>')}
       ${card('Pilot trip history',rows?.length?rows.map(t=>`<div class="visitor-row" style="cursor:default;"><div class="visitor-row-name">${esc(t.origin)} → ${esc(t.destination)}</div><div class="visitor-row-meta">${esc(t.status)} · ${esc(t.driver_email||'No driver')} · ₦${Number(t.fare).toLocaleString()}</div></div>`).join(''):'<div class="empty-state">No owner-attributed pilot trips yet.</div>')}
     `);
+    document.getElementById('paSave').onclick=async()=>{
+      const r=await pclient.rpc('pilot_create_assignment',{
+        p_driver_email:document.getElementById('paDriver').value.trim(),
+        p_vehicle:document.getElementById('paVehicle').value.trim(),
+        p_plate:document.getElementById('paPlate').value.trim(),
+        p_bike_ownership:document.getElementById('paOwn').value
+      });
+      if(r.error) return toast(r.error.message);
+      toast('Driver assignment approved');
+      ownerHome();
+    };
     document.getElementById('ownerOut').onclick=()=>roleScreen();
   }
 
@@ -9680,6 +9717,29 @@ function toggleTheme(){
     const out=await pclient.rpc('pilot_transition_trip',{p_trip_id:id,p_to_status:status,p_reason:reason||null});
     if(out.error){toast(out.error.message);return null;}
     return out.data;
+  }
+
+  let pilotLiveChannel=null;
+  function ensurePilotRealtime(){
+    if(pilotLiveChannel) return;
+    pilotLiveChannel=pclient.channel('auraa-pilot-live')
+      .on('postgres_changes',{event:'*',schema:'public',table:'pilot_trips'},payload=>{
+        const row=payload.new||{};
+        if(!row.id) return;
+        if(pilotRole==='rider' && pilotTrip===row.id && row.rider_user_id){
+          riderTripScreen(row.id);
+        }else if(pilotRole==='driver' && (row.status==='searching'||row.driver_user_id)){
+          session().then(s=>{
+            if(!s) return;
+            if(row.driver_user_id && String(row.driver_user_id)===String(s.user.id)) driverTripScreen(row.id);
+            else if(!pilotTrip) driverHome();
+          });
+        }else if(pilotRole==='owner'){
+          session().then(s=>{
+            if(s && row.owner_user_id===s.user.id) ownerHome();
+          });
+        }
+      }).subscribe();
   }
 
   async function boot(){
@@ -9718,22 +9778,24 @@ function toggleTheme(){
     }catch(e){return local;}
   }
 
-  function pilotAutocomplete(inputId,dropId,field){
-    const inp=document.getElementById(inputId);
-    const drop=document.getElementById(dropId);
+  function pilotSearch(inputId,dropId,field){
+    const inp=document.getElementById(inputId), drop=document.getElementById(dropId);
     if(!inp||!drop) return;
-    inp.addEventListener('input',()=>{
-      clearTimeout(_pTimer);
+    const run=async()=>{
       const q=inp.value.trim();
-      if(q.length<2){drop.style.display='none';return;}
-      _pTimer=setTimeout(async()=>{
-        const results=await pilotGeoSearch(q);
-        if(!results.length){drop.innerHTML='<div style="padding:.5rem;font-size:.72rem;color:var(--muted);">No results — try a landmark or street</div>';drop.style.display='block';return;}
-        drop.innerHTML=results.map(r=>`<div style="padding:.5rem .75rem;cursor:pointer;font-size:.78rem;border-bottom:1px solid var(--dark3);" onmousedown="event.preventDefault()" onclick="window._pSelect('${field}','${r.name.replace(/'/g,"\\'")}',${r.lat},${r.lng},'${inputId}','${dropId}')"><strong>${r.name}</strong>${r.live?' <span style="color:var(--gold);font-size:.6rem;">📍 LIVE</span>':''}<br/><span style="color:var(--muted);font-size:.65rem;">${r.area} · ${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}</span></div>`).join('');
-        drop.style.display='block';
-      },350);
-    });
-    inp.addEventListener('blur',()=>setTimeout(()=>{drop.style.display='none';},200));
+      if(q.length<2) return toast('Enter at least 2 characters to search');
+      drop.innerHTML='<div style="padding:.65rem;font-size:.72rem;color:var(--muted);">Searching…</div>';
+      drop.style.display='block';
+      const results=await pilotGeoSearch(q);
+      if(!results.length){
+        drop.innerHTML='<div style="padding:.65rem;font-size:.72rem;color:var(--muted);">No results — try a landmark or street</div>';
+        return;
+      }
+      drop.innerHTML=results.map(r=>`<div style="padding:.65rem .75rem;cursor:pointer;font-size:.78rem;border-bottom:1px solid var(--dark3);" onclick="window._pSelect(${JSON.stringify(field)},${JSON.stringify(r.name)},${Number(r.lat)},${Number(r.lng)},${JSON.stringify(inputId)},${JSON.stringify(dropId)})"><strong>${esc(r.name)}</strong>${r.live?' <span style="color:var(--gold);font-size:.6rem;">📍 LIVE</span>':''}<br/><span style="color:var(--muted);font-size:.65rem;">${esc(r.area)} · ${Number(r.lat).toFixed(4)}, ${Number(r.lng).toFixed(4)}</span></div>`).join('');
+    };
+    const btn=document.getElementById(field==='from'?'pFromSearch':'pToSearch');
+    if(btn && !btn.dataset.bound){btn.dataset.bound='1';btn.onclick=run;}
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();run();}});
   }
 
   window._pSelect=function(field,name,lat,lng,inputId,dropId){
@@ -9761,13 +9823,40 @@ function toggleTheme(){
     if(el){el.style.display='block';document.getElementById('pFareAmount').textContent='₦'+fare.toLocaleString();document.getElementById('pFareDetail').textContent=km.toFixed(1)+' km · ~'+Math.round(estMin)+' min · '+svc.toUpperCase();}
   }
 
-  // Init autocomplete on pilot booking
-  setTimeout(()=>{
-    pilotAutocomplete('pFrom','pFromDrop','from');
-    pilotAutocomplete('pTo','pToDrop','to');
+  function initPilotBookingEnhancements(){
+    pilotSearch('pFrom','pFromDrop','from');
+    pilotSearch('pTo','pToDrop','to');
     const svcEl=document.getElementById('pSvc');
-    if(svcEl) svcEl.addEventListener('change',pilotCalcFare);
-  },500);
+    if(svcEl && !svcEl.dataset.bound) {
+      svcEl.dataset.bound='1';
+      svcEl.addEventListener('change',()=>{
+        _pLoc.from={lat:null,lng:null,name:''};
+        _pLoc.to={lat:null,lng:null,name:''};
+        ['pFromLat','pFromLng','pToLat','pToLng','pFare'].forEach(id=>{
+          const el=document.getElementById(id); if(el) el.value='';
+        });
+        const fd=document.getElementById('pFareDisplay'); if(fd) fd.style.display='none';
+      });
+    }
+    ['pFrom','pTo'].forEach((id,idx)=>{
+      const el=document.getElementById(id);
+      if(el && !el.dataset.bound){
+        el.dataset.bound='1';
+        el.addEventListener('input',()=>{
+          const field=idx===0?'from':'to';
+          _pLoc[field]={lat:null,lng:null,name:''};
+          if(field==='from'){
+            document.getElementById('pFromLat').value='';
+            document.getElementById('pFromLng').value='';
+          }else{
+            document.getElementById('pToLat').value='';
+            document.getElementById('pToLng').value='';
+          }
+          const fd=document.getElementById('pFareDisplay'); if(fd) fd.style.display='none';
+        });
+      }
+    });
+  }
 })();
 
 </script>
