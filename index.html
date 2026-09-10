@@ -12,6 +12,8 @@
 <!-- v11.3.3 — Welcome modal now reads true global FU count from Supabase -->
 <!-- v11.5.0 — Cross-device trip recognition via Supabase real-time writes -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3pF4M4O4j1Qk3gY9qQ6s9GJ6D8T7Y=" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o9N1jWm3X4R2V0XxYwP8m+fQKXl6yLx9y2PzLqQ7J1M=" crossorigin=""></script>
 <script src="https://checkout.flutterwave.com/v3.js"></script>
 <style>
 :root {
@@ -877,6 +879,11 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
   100%{transform:scale(1);opacity:1;}
 }
 </style>
+
+<style id="auraa-pilot-map-style">
+#auraaPilotMap{height:260px;border-radius:12px;overflow:hidden;border:1px solid var(--border);margin-top:.75rem;background:var(--dark3);}
+.auraa-map-meta{font-size:.68rem;color:var(--muted);margin-top:.45rem;line-height:1.5;}
+</style>
 </head>
 <body>
 
@@ -1257,13 +1264,16 @@ const FlutterwaveConfig = {
   // ─── LIVE MODE — real money, real cards ───
   // v11.4.1 — Rotated key (replaces invalid d7c9... per Flutterwave support)
   PUBLIC_KEY: 'FLWPUBK-30a544b8ec8c98e8f3b1d4b96acfd81d-X',
+  // Legacy/demo checkout is NEVER allowed to charge real money.
+  // The controlled pilot has its own payment flow and remains separately gated.
+  LIVE_DEMO_CHECKOUT: false,
   // ─── ROLLBACK TO TEST IF NEEDED: ───
   // PUBLIC_KEY: 'FLWPUBK_TEST-6e001aca23a397bb777de8945c13187e-X',
 
   VERIFY_ENDPOINT: '/.netlify/functions/verify-payment',
 
   isLive() {
-    return this.PUBLIC_KEY.startsWith('FLWPUBK-') && !this.PUBLIC_KEY.includes('TEST');
+    return this.LIVE_DEMO_CHECKOUT === true && this.PUBLIC_KEY.startsWith('FLWPUBK-') && !this.PUBLIC_KEY.includes('TEST');
   },
   modeLabel() {
     return this.isLive() ? 'LIVE' : 'TEST';
@@ -5350,7 +5360,14 @@ function fundWallet(){
         showToast('Verification error: ' + e.message);
       });
     },
-    onclose: function(){ /* user closed modal — no-op */ }
+    onclose: async function(){
+      try{
+        if(pilotTrip){
+          const {data:cur}=await pclient.from('pilot_trips').select('status,payment_status').eq('id',pilotTrip).maybeSingle();
+          if(cur && cur.status==='searching' && cur.payment_status==='pending') await transition(pilotTrip,'cancelled','Payment checkout closed');
+        }
+      }catch(_){ }
+    }
   });
 }
 
@@ -9403,7 +9420,7 @@ function toggleTheme(){
   if(!PILOT_ENABLED || !window.supabase?.createClient) return;
 
   const pclient=window.supabase.createClient(PILOT_URL,PILOT_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
-  let pilotRole=null, pilotProfile=null, pilotTrip=null, geoWatch=null;
+  let pilotRole=null, pilotProfile=null, pilotTrip=null, geoWatch=null, pilotMap=null, pilotDriverMarker=null, pilotPickupMarker=null, pilotDestinationMarker=null, pilotLocationChannel=null;
 
   const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const toast=m=>{ try{showToast('AURAA Pilot · '+m)}catch(_){alert('AURAA Pilot · '+m)} };
@@ -9598,6 +9615,10 @@ function toggleTheme(){
         <button class="btn btn-outline" id="sharePilot" style="margin-top:.9rem;">Share trip details</button>
         <button class="btn btn-danger" id="cancelPilot" style="margin-top:.5rem;">Cancel trip</button>
       `)}
+      ${card('Live driver tracking',`
+        <div id="auraaPilotMap"></div>
+        <div id="auraaMapMeta" class="auraa-map-meta">Waiting for the driver's live location…</div>
+      `)}
       ${card('Timeline',`
         <div class="timeline">
           ${[['accepted','Driver accepted'],['en_route','Driver en route'],['arrived','Driver arrived'],['in_trip','Trip started'],['completed','Trip completed']].map(([st,lab])=>`<div class="tl-item ${t.status===st?'active':''} ${['completed'].includes(t.status)?'done':''}"><div>${lab}</div></div>`).join('')}
@@ -9606,11 +9627,57 @@ function toggleTheme(){
     `);
     document.getElementById('cancelPilot').onclick=async()=>{await transition(t.id,'cancelled','Rider cancelled');riderHome();};
     document.getElementById('sharePilot').onclick=()=>navigator.share?navigator.share({title:'AURAA pilot trip',text:`AURAA trip ${t.id}\n${t.origin} → ${t.destination}\nStatus: ${t.status}\nDriver: ${t.driver_email||'Pending'}`}):navigator.clipboard?.writeText(`AURAA trip ${t.id}\n${t.origin} → ${t.destination}\nStatus: ${t.status}`);
+    await initRiderMap(t);
     if(!['completed','cancelled','expired'].includes(t.status)) setTimeout(()=>riderTripScreen(tripId),5000);
   }
 
+  async function initRiderMap(t){
+    if(typeof L==='undefined') return;
+    const el=document.getElementById('auraaPilotMap');
+    if(!el) return;
+    if(pilotLocationChannel===null) ensurePilotRealtime();
+    try{
+      if(pilotMap) { pilotMap.remove(); pilotMap=null; }
+      pilotMap=L.map(el,{zoomControl:true,attributionControl:true});
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(pilotMap);
+      const points=[];
+      if(Number.isFinite(Number(t.origin_lat))&&Number.isFinite(Number(t.origin_lng))){
+        pilotPickupMarker=L.marker([Number(t.origin_lat),Number(t.origin_lng)]).addTo(pilotMap).bindPopup('Pickup');
+        points.push([Number(t.origin_lat),Number(t.origin_lng)]);
+      }
+      if(Number.isFinite(Number(t.destination_lat))&&Number.isFinite(Number(t.destination_lng))){
+        pilotDestinationMarker=L.marker([Number(t.destination_lat),Number(t.destination_lng)]).addTo(pilotMap).bindPopup('Destination');
+        points.push([Number(t.destination_lat),Number(t.destination_lng)]);
+      }
+      const {data:last}=await pclient.from('pilot_trip_locations').select('*').eq('trip_id',t.id).order('recorded_at',{ascending:false}).limit(1).maybeSingle();
+      if(last) { updateRiderMapLocation(last); points.unshift([Number(last.latitude),Number(last.longitude)]); }
+      if(points.length) pilotMap.fitBounds(points,{padding:[24,24]}); else pilotMap.setView([6.5244,3.3792],11);
+      setTimeout(()=>pilotMap?.invalidateSize(),50);
+    }catch(e){
+      const meta=document.getElementById('auraaMapMeta'); if(meta) meta.textContent='Map unavailable. Trip location evidence is still being recorded.';
+    }
+  }
+
+  function updateRiderMapLocation(row){
+    const lat=Number(row?.latitude),lng=Number(row?.longitude);
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)) return;
+    if(!pilotMap || typeof L==='undefined') return;
+    if(!pilotDriverMarker){
+      pilotDriverMarker=L.marker([lat,lng],{title:'AURAA Driver'}).addTo(pilotMap).bindPopup('AURAA driver');
+    }else{ pilotDriverMarker.setLatLng([lat,lng]); }
+    const age=Math.max(0,Date.now()-new Date(row.recorded_at||Date.now()).getTime());
+    const meta=document.getElementById('auraaMapMeta');
+    if(meta) meta.textContent=`Driver location updated ${Math.round(age/1000)}s ago · accuracy ${Number(row.accuracy_m||0).toFixed(0)}m`;
+  }
+
+  function destroyRiderMap(){
+    if(pilotMap){ try{pilotMap.remove();}catch(_){ } pilotMap=null; }
+    pilotDriverMarker=null; pilotPickupMarker=null; pilotDestinationMarker=null;
+  }
+
   async function driverHome(){
-    const {data:rows}=await pclient.from('pilot_trips').select('*').eq('status','searching').eq('payment_status','verified').order('created_at',{ascending:false}).limit(10);
+    const {data:rows,error}=await pclient.rpc('pilot_list_driver_requests');
+    if(error) console.warn('[AURAA pilot driver feed]',error.message);
     shell(`
       <div class="journey-header"><div><div class="journey-title">DRIVER PILOT</div><div class="journey-sub">Verified paid requests</div></div><button class="btn btn-outline btn-sm" id="driverOut">Exit</button></div>
       ${card('Trip requests',rows?.length?rows.map(t=>`
@@ -9721,25 +9788,33 @@ function toggleTheme(){
 
   let pilotLiveChannel=null;
   function ensurePilotRealtime(){
-    if(pilotLiveChannel) return;
-    pilotLiveChannel=pclient.channel('auraa-pilot-live')
-      .on('postgres_changes',{event:'*',schema:'public',table:'pilot_trips'},payload=>{
-        const row=payload.new||{};
-        if(!row.id) return;
-        if(pilotRole==='rider' && pilotTrip===row.id && row.rider_user_id){
-          riderTripScreen(row.id);
-        }else if(pilotRole==='driver' && (row.status==='searching'||row.driver_user_id)){
-          session().then(s=>{
-            if(!s) return;
-            if(row.driver_user_id && String(row.driver_user_id)===String(s.user.id)) driverTripScreen(row.id);
-            else if(!pilotTrip) driverHome();
-          });
-        }else if(pilotRole==='owner'){
-          session().then(s=>{
-            if(s && row.owner_user_id===s.user.id) ownerHome();
-          });
-        }
-      }).subscribe();
+    if(!pilotLiveChannel){
+      pilotLiveChannel=pclient.channel('auraa-pilot-live')
+        .on('postgres_changes',{event:'*',schema:'public',table:'pilot_trips'},payload=>{
+          const row=payload.new||{};
+          if(!row.id) return;
+          if(pilotRole==='rider' && pilotTrip===row.id && row.rider_user_id){
+            riderTripScreen(row.id);
+          }else if(pilotRole==='driver' && (row.status==='searching'||row.driver_user_id)){
+            session().then(s=>{
+              if(!s) return;
+              if(row.driver_user_id && String(row.driver_user_id)===String(s.user.id)) driverTripScreen(row.id);
+              else if(!pilotTrip) driverHome();
+            });
+          }else if(pilotRole==='owner'){
+            session().then(s=>{
+              if(s && row.owner_user_id===s.user.id) ownerHome();
+            });
+          }
+        }).subscribe();
+    }
+    if(!pilotLocationChannel){
+      pilotLocationChannel=pclient.channel('auraa-pilot-locations')
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'pilot_trip_locations'},payload=>{
+          const row=payload.new||{};
+          if(row.trip_id && pilotTrip===row.trip_id && pilotRole==='rider') updateRiderMapLocation(row);
+        }).subscribe();
+    }
   }
 
   async function boot(){
@@ -9761,21 +9836,33 @@ function toggleTheme(){
   const _pLoc={from:{lat:null,lng:null,name:''},to:{lat:null,lng:null,name:''}};
 
   async function pilotGeoSearch(q){
-    if(!q||q.length<2) return [];
+    if(!q||q.trim().length<2) return [];
     const ql=q.toLowerCase().trim();
-    // Check hardcoded locations first
-    const local=(typeof LAGOS_LOCATIONS!=='undefined'?LAGOS_LOCATIONS:[]).filter(l=>l.name.toLowerCase().includes(ql)).slice(0,3).map(l=>({name:l.name,area:l.area,lat:l.lat,lng:l.lng,live:false}));
+    // Curated AURAA locations remain the fastest path for common landmarks.
+    const local=(typeof LAGOS_LOCATIONS!=='undefined'?LAGOS_LOCATIONS:[])
+      .filter(l=>`${l.name||''} ${l.area||''} ${l.street||''}`.toLowerCase().includes(ql))
+      .slice(0,3)
+      .map(l=>({name:l.name,area:l.area||'Lagos',lat:Number(l.lat),lng:Number(l.lng),live:false,source:'auraa'}));
     if(local.length>=3) return local;
-    // Nominatim
+
     if(_pCache[ql]) return [...local,..._pCache[ql]].slice(0,6);
     try{
-      const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q+', Lagos, Nigeria')}&format=json&limit=5&bounded=1&viewbox=3.0,6.3,3.8,6.7&addressdetails=1`,{headers:{'Accept-Language':'en'}});
+      const r=await fetch(`/.netlify/functions/pilot-geocode?q=${encodeURIComponent(q)}`,{headers:{'Accept':'application/json'}});
       if(!r.ok) return local;
-      const d=await r.json();
-      const results=d.map(i=>({name:i.display_name.split(',').slice(0,2).join(',').trim(),area:i.address?.suburb||i.address?.city_district||'Lagos',lat:parseFloat(i.lat),lng:parseFloat(i.lon),live:true})).filter(r=>r.lat>=6.3&&r.lat<=6.75&&r.lng>=3.0&&r.lng<=3.8);
+      const out=await r.json();
+      const results=Array.isArray(out.results)?out.results.map(i=>({
+        name:i.name||i.full,
+        area:i.area||'Lagos',
+        lat:Number(i.lat),
+        lng:Number(i.lng),
+        live:true,
+        source:i.source||'geocoder'
+      })).filter(i=>Number.isFinite(i.lat)&&Number.isFinite(i.lng)):[];
       _pCache[ql]=results;
       return [...local,...results].slice(0,6);
-    }catch(e){return local;}
+    }catch(e){
+      return local;
+    }
   }
 
   function pilotSearch(inputId,dropId,field){
@@ -9784,18 +9871,29 @@ function toggleTheme(){
     const run=async()=>{
       const q=inp.value.trim();
       if(q.length<2) return toast('Enter at least 2 characters to search');
-      drop.innerHTML='<div style="padding:.65rem;font-size:.72rem;color:var(--muted);">Searching…</div>';
+      drop.innerHTML='<div style=\"padding:.65rem;font-size:.72rem;color:var(--muted);\">Searching…</div>';
       drop.style.display='block';
       const results=await pilotGeoSearch(q);
       if(!results.length){
-        drop.innerHTML='<div style="padding:.65rem;font-size:.72rem;color:var(--muted);">No results — try a landmark or street</div>';
+        drop.innerHTML='<div style=\"padding:.65rem;font-size:.72rem;color:var(--muted);\">No results — try a landmark, street or nearby area</div>';
         return;
       }
-      drop.innerHTML=results.map(r=>`<div style="padding:.65rem .75rem;cursor:pointer;font-size:.78rem;border-bottom:1px solid var(--dark3);" onclick="window._pSelect(${JSON.stringify(field)},${JSON.stringify(r.name)},${Number(r.lat)},${Number(r.lng)},${JSON.stringify(inputId)},${JSON.stringify(dropId)})"><strong>${esc(r.name)}</strong>${r.live?' <span style="color:var(--gold);font-size:.6rem;">📍 LIVE</span>':''}<br/><span style="color:var(--muted);font-size:.65rem;">${esc(r.area)} · ${Number(r.lat).toFixed(4)}, ${Number(r.lng).toFixed(4)}</span></div>`).join('');
+      drop.innerHTML='';
+      results.forEach(r=>{
+        const item=document.createElement('button');
+        item.type='button';
+        item.style.cssText='display:block;width:100%;text-align:left;padding:.65rem .75rem;cursor:pointer;font-size:.78rem;border:0;border-bottom:1px solid var(--dark3);background:transparent;color:var(--text);';
+        item.innerHTML=`<strong>${esc(r.name)}</strong>${r.live?' <span style=\"color:var(--gold);font-size:.6rem;\">📍 VERIFIED LOCATION</span>':''}<br/><span style=\"color:var(--muted);font-size:.65rem;\">${esc(r.area)} · ${Number(r.lat).toFixed(5)}, ${Number(r.lng).toFixed(5)}</span>`;
+        item.addEventListener('click',()=>window._pSelect(field,r.name,r.lat,r.lng,inputId,dropId));
+        drop.appendChild(item);
+      });
     };
     const btn=document.getElementById(field==='from'?'pFromSearch':'pToSearch');
     if(btn && !btn.dataset.bound){btn.dataset.bound='1';btn.onclick=run;}
-    inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();run();}});
+    if(!inp.dataset.enterBound){
+      inp.dataset.enterBound='1';
+      inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();run();}});
+    }
   }
 
   window._pSelect=function(field,name,lat,lng,inputId,dropId){
@@ -9807,20 +9905,27 @@ function toggleTheme(){
     pilotCalcFare();
   };
 
-  function pilotCalcFare(){
+  async function pilotCalcFare(){
     const f=_pLoc.from, t=_pLoc.to;
-    if(!f.lat||!t.lat) return;
-    const R=6371, dLat=(t.lat-f.lat)*Math.PI/180, dLon=(t.lng-f.lng)*Math.PI/180;
-    const a=Math.sin(dLat/2)**2+Math.cos(f.lat*Math.PI/180)*Math.cos(t.lat*Math.PI/180)*Math.sin(dLon/2)**2;
-    const km=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    if(!Number.isFinite(f.lat)||!Number.isFinite(f.lng)||!Number.isFinite(t.lat)||!Number.isFinite(t.lng)) return;
     const svc=document.getElementById('pSvc')?.value||'go';
-    const rates={go:{base:500,perKm:85,perMin:12,min:3000},assist:{base:1500,perKm:480,perMin:45,min:4000},bike:{base:300,perKm:60,perMin:8,min:1500},skate:{base:200,perKm:50,perMin:6,min:1000},bicycle:{base:200,perKm:45,perMin:5,min:800}};
-    const r=rates[svc]||rates.go;
-    const estMin=km*3;
-    const fare=Math.max(r.min,Math.round(r.base+(km*r.perKm)+(estMin*r.perMin)));
-    document.getElementById('pFare').value=fare;
     const el=document.getElementById('pFareDisplay');
-    if(el){el.style.display='block';document.getElementById('pFareAmount').textContent='₦'+fare.toLocaleString();document.getElementById('pFareDetail').textContent=km.toFixed(1)+' km · ~'+Math.round(estMin)+' min · '+svc.toUpperCase();}
+    if(el){el.style.display='block';document.getElementById('pFareAmount').textContent='Calculating…';document.getElementById('pFareDetail').textContent='AURAA server pricing';}
+    try{
+      const {data,error}=await pclient.rpc('pilot_quote_fare',{
+        p_service:svc,
+        p_origin_lat:f.lat,p_origin_lng:f.lng,
+        p_destination_lat:t.lat,p_destination_lng:t.lng
+      });
+      if(error||!data?.fare) throw error||new Error('No quote');
+      document.getElementById('pFare').value=Math.round(Number(data.fare));
+      if(el){
+        document.getElementById('pFareAmount').textContent='₦'+Math.round(Number(data.fare)).toLocaleString();
+        document.getElementById('pFareDetail').textContent=Number(data.distance_km).toFixed(1)+' km · ~'+Math.round(Number(data.duration_min))+' min · '+svc.toUpperCase()+' · server priced';
+      }
+    }catch(e){
+      if(el){document.getElementById('pFareAmount').textContent='';document.getElementById('pFareDetail').textContent='Unable to quote fare — please retry';}
+    }
   }
 
   function initPilotBookingEnhancements(){
