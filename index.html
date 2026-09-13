@@ -9444,6 +9444,29 @@ function toggleTheme(){
     return data?.session||null;
   }
 
+  /* ── helper: disable button with loading text while async runs ── */
+  function withLoading(btn,label,fn){
+    return async()=>{
+      if(btn.disabled) return;
+      const orig=btn.textContent;
+      btn.disabled=true; btn.textContent=label; btn.style.opacity='0.6';
+      try{ await fn(); }finally{ btn.disabled=false; btn.textContent=orig; btn.style.opacity='1'; }
+    };
+  }
+
+  /* ── helper: human-readable auth error messages ── */
+  function authMsg(err){
+    if(!err) return '';
+    const m=(err.message||String(err)).toLowerCase();
+    if(m.includes('invalid login'))       return 'Incorrect email or password.';
+    if(m.includes('email not confirmed')) return 'Your email is not yet confirmed — check your inbox (and spam folder) for the confirmation link.';
+    if(m.includes('user already registered')||m.includes('already been registered')) return 'An account with this email already exists — sign in instead, or use "Forgot password?" to reset.';
+    if(m.includes('rate limit')||m.includes('too many'))  return 'Too many attempts — please wait a moment and try again.';
+    if(m.includes('network')||m.includes('fetch'))        return 'Network error — check your connection and try again.';
+    if(m.includes('weak_password')||m.includes('at least')) return 'Password must be at least 8 characters.';
+    return err.message||'Authentication error — please try again.';
+  }
+
   function authScreen(msg=''){
     shell(`
       <div class="journey-header">
@@ -9458,24 +9481,134 @@ function toggleTheme(){
           <button class="btn btn-primary" id="pilotSignIn">Sign in</button>
           <button class="btn btn-outline" id="pilotSignUp">Create account</button>
         </div>
-        <div style="font-size:.7rem;color:var(--muted);line-height:1.5;margin-top:.75rem;">Only emails explicitly enabled in AURAA's pilot access list can activate a pilot role.</div>
+        <div style="text-align:center;margin-top:.6rem;">
+          <a href="#" id="pilotForgot" style="font-size:.75rem;color:var(--gold);text-decoration:underline;cursor:pointer;">Forgot password?</a>
+        </div>
+        <div style="font-size:.7rem;color:var(--muted);line-height:1.5;margin-top:.6rem;">Only emails explicitly enabled in AURAA's pilot access list can activate a pilot role.</div>
       `)}
     `);
-    document.getElementById('pilotSignIn').onclick=async()=>{
+
+    const btnIn=document.getElementById('pilotSignIn');
+    const btnUp=document.getElementById('pilotSignUp');
+
+    /* ── Sign In ── */
+    btnIn.onclick=withLoading(btnIn,'Signing in…',async()=>{
       const email=document.getElementById('pilotEmail').value.trim().toLowerCase(), password=document.getElementById('pilotPassword').value;
       if(!email||!password) return toast('Enter email and password');
       const {error}=await pclient.auth.signInWithPassword({email,password});
-      if(error) return authScreen(error.message);
+      if(error) return authScreen(authMsg(error));
       roleScreen();
-    };
-    document.getElementById('pilotSignUp').onclick=async()=>{
+    });
+
+    /* ── Create Account ── */
+    btnUp.onclick=withLoading(btnUp,'Creating…',async()=>{
       const email=document.getElementById('pilotEmail').value.trim().toLowerCase(), password=document.getElementById('pilotPassword').value;
-      if(!email||password.length<8) return toast('Use an email and password of at least 8 characters');
-      const {data,error}=await pclient.auth.signUp({email,password});
-      if(error) return authScreen(error.message);
-      if(!data.session) return authScreen('Check your email, confirm the account, then sign in.');
-      roleScreen();
-    };
+      if(!email) return toast('Enter an email address');
+      if(password.length<8) return toast('Password must be at least 8 characters');
+      try{
+        const {data,error}=await pclient.auth.signUp({email,password});
+        if(error) return authScreen(authMsg(error));
+        /* Supabase v2+: if email confirmation is on, data.session is null and
+           data.user.identities may be empty when the email is already taken
+           (anti-enumeration). We handle both paths: */
+        if(data.session){
+          /* Session granted immediately (email confirmation off or auto-confirmed) */
+          return roleScreen();
+        }
+        if(data.user && data.user.identities && data.user.identities.length===0){
+          /* Email already registered — Supabase returns a fake success to prevent enumeration */
+          return authScreen('An account with this email already exists — sign in instead, or use "Forgot password?" to reset.');
+        }
+        return authScreen('Account created! Check your email (including spam) for the confirmation link, then sign in.');
+      }catch(e){
+        return authScreen('Network error — check your connection and try again.');
+      }
+    });
+
+    /* ── Forgot Password link ── */
+    document.getElementById('pilotForgot').onclick=(e)=>{ e.preventDefault(); forgotScreen(); };
+
+    /* ── Enter key submits Sign In ── */
+    document.getElementById('pilotPassword').addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'){ e.preventDefault(); btnIn.click(); }
+    });
+    document.getElementById('pilotEmail').addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'){ e.preventDefault(); document.getElementById('pilotPassword').focus(); }
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     FORGOT PASSWORD SCREEN
+     ══════════════════════════════════════════════════════════════════ */
+  function forgotScreen(msg=''){
+    shell(`
+      <div class="journey-header">
+        <div><div class="journey-title">AURAA CONTROLLED PILOT</div><div class="journey-sub">Password reset</div></div>
+        <div class="journey-step-pill">v12</div>
+      </div>
+      ${msg?`<div class="alert-row alert-warn">${esc(msg)}</div>`:''}
+      ${card('Reset your password',`
+        <p style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:0 0 .8rem;">Enter the email you registered with. We'll send a link to set a new password.</p>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="pilotResetEmail" type="email" autocomplete="email" placeholder="your pilot email"></div>
+        <button class="btn btn-primary" id="pilotSendReset" style="width:100%;">Send reset link</button>
+        <div style="text-align:center;margin-top:.6rem;">
+          <a href="#" id="pilotBackToLogin" style="font-size:.75rem;color:var(--gold);text-decoration:underline;cursor:pointer;">Back to sign in</a>
+        </div>
+      `)}
+    `);
+    const btnReset=document.getElementById('pilotSendReset');
+    btnReset.onclick=withLoading(btnReset,'Sending…',async()=>{
+      const email=document.getElementById('pilotResetEmail').value.trim().toLowerCase();
+      if(!email) return toast('Enter your email address');
+      try{
+        const {error}=await pclient.auth.resetPasswordForEmail(email,{
+          redirectTo: location.origin + location.pathname + '?pilot=1'
+        });
+        if(error) return forgotScreen(authMsg(error));
+        forgotScreen('Reset link sent! Check your inbox (and spam folder). Click the link to set a new password.');
+      }catch(e){
+        forgotScreen('Network error — check your connection and try again.');
+      }
+    });
+    document.getElementById('pilotBackToLogin').onclick=(e)=>{ e.preventDefault(); authScreen(); };
+    document.getElementById('pilotResetEmail').addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'){ e.preventDefault(); btnReset.click(); }
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     SET NEW PASSWORD SCREEN (shown after clicking recovery link)
+     ══════════════════════════════════════════════════════════════════ */
+  function newPasswordScreen(msg=''){
+    shell(`
+      <div class="journey-header">
+        <div><div class="journey-title">AURAA CONTROLLED PILOT</div><div class="journey-sub">Set new password</div></div>
+        <div class="journey-step-pill">v12</div>
+      </div>
+      ${msg?`<div class="alert-row alert-warn">${esc(msg)}</div>`:''}
+      ${card('Choose a new password',`
+        <div class="form-group"><label class="form-label">New password</label><input class="form-input" id="pilotNewPw" type="password" autocomplete="new-password" placeholder="Minimum 8 characters"></div>
+        <div class="form-group"><label class="form-label">Confirm password</label><input class="form-input" id="pilotConfirmPw" type="password" autocomplete="new-password" placeholder="Repeat the password"></div>
+        <button class="btn btn-primary" id="pilotSetPw" style="width:100%;">Update password</button>
+      `)}
+    `);
+    const btnSet=document.getElementById('pilotSetPw');
+    btnSet.onclick=withLoading(btnSet,'Updating…',async()=>{
+      const pw=document.getElementById('pilotNewPw').value;
+      const pw2=document.getElementById('pilotConfirmPw').value;
+      if(pw.length<8) return toast('Password must be at least 8 characters');
+      if(pw!==pw2) return newPasswordScreen('Passwords do not match.');
+      try{
+        const {error}=await pclient.auth.updateUser({password:pw});
+        if(error) return newPasswordScreen(authMsg(error));
+        authScreen('Password updated! Sign in with your new password.');
+      }catch(e){
+        newPasswordScreen('Network error — check your connection and try again.');
+      }
+    });
+    document.getElementById('pilotConfirmPw').addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'){ e.preventDefault(); btnSet.click(); }
+    });
   }
 
   async function roleScreen(){
@@ -9826,7 +9959,13 @@ function toggleTheme(){
     const s=await session();
     if(s) roleScreen(); else authScreen();
   }
-  pclient.auth.onAuthStateChange(()=>{});
+  pclient.auth.onAuthStateChange((event,_session)=>{
+    if(event==='PASSWORD_RECOVERY'){
+      /* User clicked the reset link in email — Supabase set a recovery session.
+         Show the "set new password" screen immediately. */
+      newPasswordScreen();
+    }
+  });
   boot();
   window.AURAA_PILOT={client:pclient,signOut:()=>pclient.auth.signOut(),stopGeo};
 
