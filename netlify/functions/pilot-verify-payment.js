@@ -11,7 +11,7 @@ export default async (req, _context) => {
   }
 
   const supabaseUrl = Netlify.env.get("SUPABASE_URL");
-  const serviceKey = Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceKey = Netlify.env.get("SUPABASE_SECRET_KEY");
   const flwSecret = Netlify.env.get("FLW_SECRET_KEY");
 
   if (!supabaseUrl || !serviceKey || !flwSecret) {
