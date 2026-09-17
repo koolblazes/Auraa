@@ -3093,7 +3093,7 @@ function requireIdentity(purpose, opts){
         body: `<div class="fu-pledge-box" style="margin:0;">
           <div class="fu-pledge-head">
             <div class="fu-pledge-title">Turn trips into ownership</div>
-            <div class="fu-pledge-toggle${state.pledge_on?' on':''}" id="wizPledgeToggle" onclick="this.classList.toggle('on')"></div>
+            <div class="fu-pledge-toggle${state.pledge_on?' on':''}" id="wizPledgeToggle"></div>
           </div>
           <div class="fu-pledge-sub">1-year lock target. Withdraw or convert anytime.</div>
           <div style="font-size:.65rem;color:var(--muted);margin-bottom:.2rem;">Choose your %:</div>
@@ -3104,6 +3104,14 @@ function requireIdentity(purpose, opts){
         </div>`,
         focus: null,
         onMount: (stepEl)=>{
+          // STO toggle — persist to state so re-renders keep the selection
+          const toggle = stepEl.querySelector('#wizPledgeToggle');
+          if(toggle){
+            toggle.onclick = ()=>{
+              toggle.classList.toggle('on');
+              state.pledge_on = toggle.classList.contains('on');
+            };
+          }
           stepEl.querySelectorAll('#wizPctRow .fu-pct').forEach(p=>{
             p.onclick = ()=>{
               stepEl.querySelectorAll('#wizPctRow .fu-pct').forEach(x=>x.classList.remove('selected'));
