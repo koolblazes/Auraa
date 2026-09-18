@@ -9762,7 +9762,7 @@ function toggleTheme(){
       `)}
       ${card('Timeline',`
         <div class="timeline">
-          ${[['accepted','Driver accepted'],['en_route','Driver en route'],['arrived','Driver arrived'],['in_trip','Trip started'],['completed','Trip completed']].map(([st,lab])=>`<div class="tl-item ${t.status===st?'active':''} ${['completed'].includes(t.status)?'done':''}"><div>${lab}</div></div>`).join('')}
+          ${(()=>{const order=['accepted','en_route','arrived','in_trip','completed'];const ci=order.indexOf(t.status);return[['accepted','Driver accepted'],['en_route','Driver en route'],['arrived','Driver arrived'],['in_trip','Trip started'],['completed','Trip completed']].map(([st,lab])=>{const si=order.indexOf(st);const cls=ci>=0&&si<ci?'done':si===ci?'active':'';return`<div class="tl-item ${cls}"><div>${lab}</div></div>`;}).join('');})()}
         </div>
       `)}
     `);
