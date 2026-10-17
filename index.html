@@ -913,6 +913,9 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
     <div class="r2-title">Welcome to AURAA</div>
     <div class="r2-sub">Select your role to continue</div>
 
+    <!-- v12.1 — Identity banner: shows current user with "Not you?" switch -->
+    <div id="identityBanner" style="display:none;width:100%;max-width:440px;background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);border-radius:10px;padding:.55rem .85rem;margin-bottom:.75rem;font-size:.72rem;color:var(--muted);text-align:center;line-height:1.5;"></div>
+
     <div class="r2-section">I want to ride</div>
     <div class="r2-rider" onclick="selectRole('rider')" role="button" aria-label="Continue as Rider">
       <div class="r2-rider-icon">
@@ -1030,6 +1033,7 @@ body.journey-mode #tabBar{opacity:.3;pointer-events:none;transition:opacity .3s;
     <button class="icon-btn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
     <button class="icon-btn" onclick="showDeck('vc')" title="Investor Deck">📊</button>
     <button class="icon-btn" onclick="logout()" title="Switch role">↩️</button>
+    <button class="icon-btn" onclick="switchUser()" title="Switch user">👤</button>
   </div>
 </div>
 
@@ -3911,6 +3915,9 @@ function hideSplash(){
 // Auto-advance after 5 seconds if user doesn't tap
 setTimeout(()=>hideSplash(),5000);
 
+// v12.1 — Populate identity banner on load so returning visitors see who's logged in
+setTimeout(()=>{ if(typeof _updateIdentityBanner === 'function') _updateIdentityBanner(); }, 100);
+
 // ═══════════════════════════════════════════════
 // FOUNDING USER REVEAL TRIGGER (v10.7)
 // Fires the one-time celebration for any user entering a non-investor
@@ -4036,6 +4043,58 @@ function logout(){
   document.getElementById('mainContent').classList.remove('show');
   document.getElementById('adminTicker').classList.remove('show');
   document.getElementById('roleSelect').classList.add('show');
+  _updateIdentityBanner();
+}
+
+// v12.1 — Switch user: clears current identity so a new visitor can register fresh.
+// Keeps the directory (auraa_identity_directory) intact so returning users can
+// still enter their code. Clears session-specific localStorage keys that would
+// bleed one person's data into the next.
+function switchUser(){
+  IdentityStore.clear();
+  // Clear session-specific state that references the old identity
+  localStorage.removeItem('auraa_proof_trip_status');
+  localStorage.removeItem('auraa_live_trip');
+  localStorage.removeItem('auraa_completed_trips');
+  // Reset demo wallets so the new user doesn't see the old user's balances
+  S.riderWallet = 25000; S.driverWallet = 0; S.ownerWallet = 0; S.platformWallet = 0;
+  localStorage.setItem('auraa_rider_wallet', S.riderWallet);
+  localStorage.setItem('auraa_driver_wallet', '0');
+  localStorage.setItem('auraa_owner_wallet', '0');
+  localStorage.setItem('auraa_platform_wallet', '0');
+  // Reset app state
+  S.role=null; S.tab=0; S.tripState='idle'; S.tripProgress=0;
+  LS.pickup=null; LS.dropoff=null; LS.activeField=null; LS.focusIdx=-1;
+  if(S.progressTimer) clearInterval(S.progressTimer);
+  if(S._deviationTimer){ clearTimeout(S._deviationTimer); S._deviationTimer=null; }
+  Object.values(countdownTimers).forEach(iv=>clearInterval(iv));
+  countdownTimers={};
+  activeRequests=[1,2,3];
+  document.getElementById('liveBadge').style.display='none';
+  document.getElementById('appHeader').classList.remove('show');
+  document.getElementById('tabBar').classList.remove('show');
+  document.getElementById('mainContent').classList.remove('show');
+  document.getElementById('adminTicker').classList.remove('show');
+  document.getElementById('roleSelect').classList.add('show');
+  _updateIdentityBanner();
+  showToast('Signed out — register as a new Founding User');
+}
+
+// v12.1 — Identity banner on role select: shows who is currently identified
+// and provides a "Not you?" escape hatch for new visitors on shared devices.
+function _updateIdentityBanner(){
+  const banner = document.getElementById('identityBanner');
+  if(!banner) return;
+  const me = IdentityStore.current();
+  if(me && me.name){
+    const firstName = me.name.split(' ')[0];
+    const seq = FU.getSeq(me.email);
+    banner.innerHTML = `<span>Continuing as <strong>${firstName}</strong>${seq ? ' · FU #'+seq : ''}</span> <a onclick="switchUser()" style="color:var(--gold);cursor:pointer;text-decoration:underline;margin-left:.4rem;">Not you? Start fresh →</a>`;
+    banner.style.display = 'block';
+  } else {
+    banner.innerHTML = '';
+    banner.style.display = 'none';
+  }
 }
 
 // ═══════════════════════════════════════════════
