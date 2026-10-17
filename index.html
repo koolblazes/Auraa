@@ -1436,10 +1436,14 @@ const TripSync = (function(){
     if(error) console.error('[PairingSync] status update failed:', error);
   }
 
-  async function fetchPairings(){
+  async function fetchPairings(ownerFu){
     const c = _getClient();
     if(!c) return null;
-    const { data, error } = await c.from('pairings').select('*').order('approved_at', { ascending: false }).limit(100);
+    // v12.2 Security: only fetch pairings belonging to this owner.
+    // Previously fetched ALL pairings, leaking vehicle data cross-device.
+    let q = c.from('pairings').select('*').order('approved_at', { ascending: false }).limit(100);
+    if(ownerFu) q = q.eq('owner_fu', ownerFu);
+    const { data, error } = await q;
     if(error){ console.error('[PairingSync] fetch failed:', error); return null; }
     return data || [];
   }
@@ -2473,11 +2477,10 @@ function requireIdentity(purpose, opts){
   opts = opts || {};
   return new Promise(resolve => {
     const existing = IdentityStore.current();
-    // If already has identity AND has this role, skip entirely
-    if(existing && existing.name && existing.email && !opts.force){
-      const desired = opts.role || S.role || existing.role || 'rider';
-      if(FU.rolesFor(existing.email).includes(desired)){ resolve(existing); return; }
-    }
+    // v12.1 Security: NEVER auto-skip registration. Always require confirmation.
+    // A stored identity may belong to a previous visitor on this device.
+    // Pre-fill from existing so returning users just tap "Continue",
+    // but new visitors always get a chance to enter their own info.
 
     const defaultRole = opts.role || S.role || 'rider';
     // v11.3.3 — nextSeq must reflect REAL global registrations, not localStorage.
@@ -2562,7 +2565,7 @@ function requireIdentity(purpose, opts){
         return [ stepReturning() ];
       }
       if(state.mode === 'add-role'){
-        const list = [stepRoleOnly()];
+        const list = [stepConfirmIdentity(), stepRoleOnly()];
         // Conditional extras for add-role flow too
         if(state.role === 'owner') list.push(stepOwnerVehicle());
         if(state.role === 'skater') list.push(stepSkaterDualDrive());
@@ -3137,6 +3140,47 @@ function requireIdentity(purpose, opts){
       };
     }
 
+    function stepConfirmIdentity(){
+      // v12.1 Security: always confirm identity before proceeding.
+      // Prevents a new visitor from silently inheriting a previous user's session.
+      const _e=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+      const firstName = state.name.split(' ')[0];
+      const seq = FU.getSeq(state.email);
+      return {
+        title: 'Welcome back?',
+        hint: 'Confirm this is you, or start fresh.',
+        body: `<div style="text-align:center;padding:1rem 0;">
+          <div style="font-size:2.2rem;margin-bottom:.5rem;">👤</div>
+          <div style="font-size:1.1rem;font-weight:700;color:var(--gold);margin-bottom:.25rem;">${_e(firstName)}</div>
+          <div style="font-size:.78rem;color:var(--muted);margin-bottom:.15rem;">${_e(state.email)}</div>
+          ${seq ? `<div style="font-size:.7rem;color:var(--muted);">Founding User #${seq}</div>` : ''}
+          <div style="display:flex;gap:.6rem;justify-content:center;margin-top:1.2rem;">
+            <button id="confirmYes" class="btn-cta" style="flex:1;max-width:160px;">Yes, that's me</button>
+            <button id="confirmNo" class="btn-cta" style="flex:1;max-width:160px;background:transparent;border:1px solid var(--gold);color:var(--gold);">Not me — start fresh</button>
+          </div>
+        </div>`,
+        focus: null,
+        autoAdvance: true, // hide default CTA — we have custom buttons
+        onMount: (stepEl)=>{
+          const yesBtn = stepEl.querySelector('#confirmYes');
+          const noBtn = stepEl.querySelector('#confirmNo');
+          if(yesBtn) yesBtn.onclick = ()=> __wiz.advance();
+          if(noBtn) noBtn.onclick = ()=>{
+            // Clear stored identity and restart as new user
+            IdentityStore.clear();
+            localStorage.removeItem('auraa_pairings'); // v12.2: clear other user's pairings
+            state.mode = 'new';
+            state.name = ''; state.phone = ''; state.email = '';
+            _updateIdentityBanner();
+            // Rebuild wizard steps for new-user flow
+            const newSteps = buildStepDefs();
+            __wiz.replaceSteps(newSteps);
+          };
+        },
+        validate: ()=> true,
+      };
+    }
+
     function stepRoleOnly(){
       // Used for add-role flow only: returning user adding another role
       const roleKeys = ['rider','driver','owner','biker','bicycler','skater','mechanic'];
@@ -3311,7 +3355,7 @@ function requireIdentity(purpose, opts){
         state.step = 0;
         steps.length = 0;
         if(state.mode === 'add-role'){
-          steps.push(stepRoleOnly(), stepRoleQuestion(), stepSummary());
+          steps.push(stepConfirmIdentity(), stepRoleOnly(), stepRoleQuestion(), stepSummary());
         } else {
           rebuildStepsFromRole();
         }
@@ -3324,6 +3368,12 @@ function requireIdentity(purpose, opts){
         logEvent({ action:'Returning User Signed In', tag:'active', detail:`${found.name} · code chip tap`, actor:found });
         showToast(`Welcome back, ${found.name.split(' ')[0]}!`);
         closeWith(found);
+      },
+      replaceSteps: (newSteps)=>{
+        state.step = 0;
+        steps.length = 0;
+        newSteps.forEach(s => steps.push(s));
+        renderStep();
       },
       removeCode: (code)=>{
         if(!confirm('Remove this code from this device? The account itself is not deleted.')) return;
@@ -4056,6 +4106,9 @@ function switchUser(){
   localStorage.removeItem('auraa_proof_trip_status');
   localStorage.removeItem('auraa_live_trip');
   localStorage.removeItem('auraa_completed_trips');
+  // v12.2 Security: clear pairings and driver requests so the next user doesn't see another owner's vehicle
+  localStorage.removeItem('auraa_pairings');
+  localStorage.removeItem('auraa_driver_requests');
   // Reset demo wallets so the new user doesn't see the old user's balances
   S.riderWallet = 25000; S.driverWallet = 0; S.ownerWallet = 0; S.platformWallet = 0;
   localStorage.setItem('auraa_rider_wallet', S.riderWallet);
@@ -5030,8 +5083,9 @@ function _startTripFlow(fare, rider, paymentSource, paymentMeta){
   // exists yet, fall back honestly to no owner-auth (a plain trip) rather than
   // fabricating a "Toyota Camry / Demo Owner".
   const _me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
-  const _pairing = (typeof PairingStore!=='undefined')
-      ? (PairingStore.activeFor(_me.fu_number) || PairingStore.list().find(p=>p.status==='active'))
+  // v12.2 Security: only match pairings for this user, never fall back to any active
+  const _pairing = (typeof PairingStore!=='undefined' && _me.fu_number)
+      ? PairingStore.activeFor(_me.fu_number)
       : null;
   const _usesOwnerVehicle = (svc === 'ASSIST' || svc === 'GO') && !!_pairing;
 
@@ -6097,7 +6151,11 @@ const PairingStore = {
   // pairings not yet synced are kept and re-pushed.
   async hydrate(){
     if(typeof TripSync === 'undefined') return;
-    const rows = await TripSync.fetchPairings();
+    // v12.2 Security: only hydrate pairings belonging to the current user.
+    // Without this, every device downloads every user's pairings from Supabase.
+    const me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
+    if(!me.fu_number) return; // No identity → nothing to hydrate
+    const rows = await TripSync.fetchPairings(me.fu_number);
     if(rows === null) return; // offline / client not ready — keep local as-is
     const local = this._all();
     const dbIds = new Set(rows.map(r=>r.id));
@@ -6257,8 +6315,10 @@ function renderOwnerMonitor(){
   // live — so they are shown as DESIGN, labelled "activating at launch", never
   // populated with fabricated values. No fake deviation timer.
   const me = (typeof IdentityStore!=='undefined' && IdentityStore.current()) || {};
-  const pairing = (typeof PairingStore!=='undefined')
-      ? (PairingStore.activeFor(me.fu_number) || PairingStore.list().find(p=>p.status==='active'))
+  // v12.2 Security: ONLY show pairings that belong to this owner.
+  // Never fall back to "any active pairing" — that leaks another user's vehicle.
+  const pairing = (typeof PairingStore!=='undefined' && me.fu_number)
+      ? PairingStore.activeFor(me.fu_number)
       : null;
   const trip = JSON.parse(localStorage.getItem('auraa_live_trip')||'null');
   const tripActive = trip && ['searching','accepted','active'].includes(trip.status)
