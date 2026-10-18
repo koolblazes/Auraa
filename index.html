@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="theme-color" content="#050f08"/>
+<meta name="description" content="Vehicle-first mobility marketplace connecting car owners, vetted drivers, and riders across Lagos."/>
+<link rel="manifest" href="/manifest.json"/>
+<link rel="apple-touch-icon" href="/icons/icon-192x192.png"/>
 <title>AURAA — Assured Urban Ride Assistance App</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <!-- v11.2.2 — Rescue path for trapped pre-v11.2.1 users -->
@@ -10241,5 +10245,15 @@ function toggleTheme(){
   <div class="af-legal">Unauthorised reproduction, distribution, or use of this platform is strictly prohibited.</div>
 </footer>
 
+<script>
+// Register Service Worker for PWA / TWA support
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('/sw.js').then(r=>{
+      console.log('[SW] registered, scope:',r.scope);
+    }).catch(e=>console.warn('[SW] registration failed:',e));
+  });
+}
+</script>
 </body>
 </html>
