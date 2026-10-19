@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.auraahq.twa",
+      "sha256_cert_fingerprints": [
+        "4B:CF:E8:5A:79:0D:26:CC:96:0F:D7:B4:1F:9F:8F:38:6A:A7:A7:89:2E:7E:24:55:D5:32:08:89:EF:93:9C:FD"
+      ]
+    }
+  }
+]
